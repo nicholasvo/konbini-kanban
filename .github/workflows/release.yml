@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - "*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (must equal manifest version, no 'v'). Leave blank to use manifest.json."
+        required: false
 
 jobs:
   build:
@@ -27,9 +32,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${GITHUB_REF#refs/tags/}"
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            tag="${{ github.event.inputs.tag }}"
+          elif [ "${GITHUB_REF}" != "${GITHUB_REF#refs/tags/}" ]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            tag="$(node -p "require('./manifest.json').version")"
+          fi
 
+          # On manual runs the tag may not exist yet; create it at this commit.
           gh release create "$tag" \
+            --target "$GITHUB_SHA" \
             --title="$tag" \
             --draft \
             main.js manifest.json styles.css
