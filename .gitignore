@@ -1,0 +1,10 @@
+# Build
+main.js
+*.js.map
+node_modules/
+
+# Obsidian
+data.json
+
+# OS
+.DS_Store

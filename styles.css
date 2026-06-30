@@ -1,0 +1,1260 @@
+/* ============================================================
+   Bases Kanban — Linear-flavored board
+   Motion tokens from the Codex animation style guide.
+   ============================================================ */
+
+:root {
+	--motion-ease-enter: cubic-bezier(0.19, 1, 0.22, 1);
+	--motion-ease-exit-snappy: cubic-bezier(0.65, 0, 0.4, 1);
+	--motion-duration-basic: 150ms;
+	--motion-duration-relaxed: 300ms;
+	--motion-scale-from: 0.98;
+	--motion-distance-xs: 2px;
+	--motion-distance-sm: 8px;
+
+	--bk-card-radius: 8px;
+	--bk-gap: 8px;
+}
+
+/* ---- Layout ------------------------------------------------ */
+
+.bk-view-container,
+.bk-root {
+	height: 100%;
+	overflow: hidden;
+}
+
+.bk-columns {
+	display: flex;
+	gap: 12px;
+	height: 100%;
+	padding: 12px;
+	overflow-x: auto;
+	align-items: flex-start;
+}
+
+.bk-column {
+	display: flex;
+	flex-direction: column;
+	flex: 0 0 300px;
+	max-height: 100%;
+	background: var(--background-secondary);
+	border-radius: 10px;
+	overflow: hidden;
+}
+
+.bk-column-header {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 10px 12px;
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.bk-column-title {
+	flex: 1;
+}
+
+.bk-column-count {
+	color: var(--text-muted);
+	font-weight: 500;
+}
+
+.bk-column-add {
+	cursor: pointer;
+	width: 20px;
+	height: 20px;
+	display: grid;
+	place-items: center;
+	border-radius: 5px;
+	color: var(--text-muted);
+	font-size: 16px;
+	line-height: 1;
+	transition: background-color 80ms ease, color 80ms ease;
+}
+
+.bk-column-add:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.bk-column-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--bk-gap);
+	padding: 4px 8px 12px;
+	overflow-y: auto;
+	flex: 1;
+	transition: background-color 120ms ease;
+}
+
+/* While a card is dragged over a column, darken the drop zone to signal it. */
+.bk-column-dragover {
+	background: var(--background-modifier-hover);
+	box-shadow: inset 0 0 0 2px var(--color-accent);
+	border-radius: 8px;
+}
+
+.bk-column-dragover::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--background-modifier-cover, rgba(0, 0, 0, 0.18));
+	opacity: 0.5;
+	border-radius: 8px;
+	pointer-events: none;
+}
+
+.bk-column-body {
+	position: relative;
+}
+
+.bk-column-empty {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
+	padding: 14px 0;
+}
+
+/* When a column empties out (e.g. its last card was dragged away), the
+   placeholder eases in rather than snapping. */
+@media (prefers-reduced-motion: no-preference) {
+	.bk-column-empty {
+		animation: bk-empty-in var(--motion-duration-relaxed) var(--motion-ease-enter);
+	}
+}
+
+@keyframes bk-empty-in {
+	from {
+		opacity: 0;
+		transform: translateY(calc(var(--motion-distance-xs) * -1));
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* ---- Card -------------------------------------------------- */
+
+.bk-card {
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--bk-card-radius);
+	padding: 9px 11px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	cursor: pointer;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+	transition: border-color 100ms ease, box-shadow 100ms ease, transform 100ms ease;
+}
+
+.bk-card:hover {
+	border-color: var(--background-modifier-border-hover);
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* The source slot while dragging: an empty dashed placeholder. */
+.bk-card-placeholder {
+	background: var(--background-modifier-hover);
+	border: 1px dashed var(--background-modifier-border-hover);
+	box-shadow: none;
+}
+
+.bk-card-placeholder > * {
+	visibility: hidden;
+}
+
+/* The floating clone that follows the cursor. */
+.bk-card-ghost {
+	position: fixed;
+	z-index: var(--layer-dragged, 100);
+	margin: 0;
+	pointer-events: none;
+	cursor: grabbing;
+	box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+	transform: scale(1.02) rotate(1.5deg);
+	opacity: 0.97;
+}
+
+body.bk-dragging {
+	cursor: grabbing;
+	user-select: none;
+}
+
+/* The moved card and the surrounding reflow are animated imperatively via the
+   FLIP in view.ts (playFlip): cards spring from their old slot into the new
+   layout with a liquid, overshooting curve. */
+
+.bk-card-breadcrumb {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.bk-crumb-sep {
+	display: inline-flex;
+	opacity: 0.6;
+}
+
+.bk-crumb-sep svg {
+	width: 12px;
+	height: 12px;
+}
+
+.bk-card-title-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 7px;
+}
+
+.bk-card-status {
+	display: inline-flex;
+	flex: 0 0 auto;
+	margin-top: 1px;
+	cursor: pointer;
+	border-radius: 50%;
+	transition: transform 80ms ease;
+}
+
+.bk-card-status:hover {
+	transform: scale(1.12);
+}
+
+.bk-card-title {
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	line-height: 1.35;
+	font-weight: 500;
+}
+
+.bk-card-meta {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.bk-card-priority,
+.bk-card-addlabel,
+.bk-card-subadd {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 5px;
+	cursor: pointer;
+	color: var(--text-muted);
+	transition: background-color 80ms ease, color 80ms ease;
+}
+
+.bk-card-priority:hover,
+.bk-card-addlabel:hover,
+.bk-card-subadd:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.bk-card-addlabel svg,
+.bk-card-subadd svg {
+	width: 14px;
+	height: 14px;
+}
+
+.bk-card-rollup {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 7px 1px 5px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 11px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.bk-card-rollup.is-toggle {
+	cursor: pointer;
+	transition: background-color 80ms ease;
+}
+
+.bk-card-rollup.is-toggle:hover {
+	background: var(--background-modifier-hover);
+}
+
+.bk-rollup-chevron {
+	display: inline-flex;
+	margin-left: -1px;
+}
+
+.bk-rollup-chevron svg {
+	width: 13px;
+	height: 13px;
+}
+
+/* ---- Nested sub-issues ------------------------------------- */
+
+.bk-sublist {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	margin-top: 7px;
+	padding-left: 7px;
+	margin-left: 7px;
+	border-left: 1.5px solid var(--background-modifier-border);
+	animation: bk-sublist-in var(--motion-duration-basic) var(--motion-ease-enter);
+}
+
+@keyframes bk-sublist-in {
+	from {
+		opacity: 0;
+		transform: translateY(calc(var(--motion-distance-xs) * -1));
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* Nested lists (grandchildren) shouldn't double the top margin. */
+.bk-subrow-wrap .bk-sublist {
+	margin-top: 1px;
+}
+
+.bk-subrow {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 4px 6px;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: background-color 80ms ease;
+}
+
+.bk-subrow:hover {
+	background: var(--background-modifier-hover);
+}
+
+.bk-subrow-status {
+	display: inline-flex;
+	flex: 0 0 auto;
+	cursor: pointer;
+	border-radius: 50%;
+	transition: transform 80ms ease;
+}
+
+.bk-subrow-status:hover {
+	transform: scale(1.12);
+}
+
+.bk-subrow-status .bk-icon {
+	width: 14px;
+	height: 14px;
+}
+
+.bk-subrow-title {
+	flex: 1;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-normal);
+	line-height: 1.3;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.bk-subrow-priority {
+	display: inline-flex;
+	flex: 0 0 auto;
+	cursor: pointer;
+	color: var(--text-muted);
+}
+
+.bk-subrow-priority .bk-icon {
+	width: 14px;
+	height: 14px;
+}
+
+.bk-subrow-date {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	flex: 0 0 auto;
+}
+
+.bk-subrow-date.is-overdue {
+	color: var(--color-red);
+}
+
+.bk-card-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 1px 8px 1px 7px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 11px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.bk-label-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	flex: 0 0 auto;
+}
+
+.bk-card-date-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 8px 1px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 11px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	cursor: pointer;
+	transition: background-color 80ms ease, border-color 80ms ease;
+}
+
+.bk-card-date-pill:hover {
+	background: var(--background-modifier-hover);
+}
+
+.bk-card-date-pill .bk-pill-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.bk-card-date-pill.is-overdue {
+	color: var(--color-red);
+	border-color: var(--color-red);
+}
+
+.bk-card-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.bk-card-date {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+}
+
+.bk-card-subadd {
+	opacity: 0;
+}
+
+.bk-card:hover .bk-card-subadd {
+	opacity: 1;
+}
+
+/* ---- Icons ------------------------------------------------- */
+
+.bk-icon {
+	display: block;
+}
+
+.bk-card-priority .bk-icon,
+.bk-card-status .bk-icon {
+	width: 16px;
+	height: 16px;
+}
+
+/* ---- Popover (status / priority / labels) ------------------ */
+
+.bk-popover {
+	position: fixed;
+	z-index: var(--layer-menu);
+	min-width: 220px;
+	max-width: 280px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+	padding: 6px;
+	overflow: hidden;
+}
+
+.bk-popover-search input {
+	width: 100%;
+	border: none;
+	background: transparent;
+	padding: 5px 7px 8px;
+	font-size: var(--font-ui-small);
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin-bottom: 5px;
+	color: var(--text-normal);
+}
+
+.bk-popover-search input:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.bk-popover-list {
+	max-height: 280px;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.bk-popover-item {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 6px 8px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+}
+
+.bk-popover-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.bk-popover-item .bk-icon {
+	width: 16px;
+	height: 16px;
+	flex: 0 0 auto;
+}
+
+.bk-popover-label {
+	flex: 1;
+}
+
+.bk-popover-check {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+
+.bk-popover-check svg {
+	width: 14px;
+	height: 14px;
+}
+
+.bk-check {
+	width: 16px;
+	height: 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	color: #fff;
+}
+
+.bk-check.is-checked {
+	background: var(--color-accent);
+	border-color: var(--color-accent);
+}
+
+.bk-check svg {
+	width: 12px;
+	height: 12px;
+}
+
+.bk-popover-create .bk-popover-label {
+	color: var(--text-muted);
+}
+
+.bk-date-input {
+	width: 100%;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 6px 8px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	margin-bottom: 4px;
+}
+
+.bk-date-clear {
+	color: var(--text-muted);
+}
+
+.bk-pill.is-set {
+	border-color: var(--background-modifier-border-hover);
+	color: var(--text-normal);
+}
+
+/* ---- Create modal ------------------------------------------ */
+
+.bk-create-modal {
+	width: 640px;
+	max-width: 92vw;
+	padding: 0;
+}
+
+.bk-create-modal .modal-content {
+	padding: 18px 20px 14px;
+}
+
+.bk-create-header {
+	margin-bottom: 12px;
+}
+
+.bk-create-crumb {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	background: var(--background-secondary);
+	padding: 3px 8px;
+	border-radius: 6px;
+}
+
+.bk-create-crumb-icon {
+	display: inline-flex;
+}
+
+.bk-create-crumb-icon svg {
+	width: 13px;
+	height: 13px;
+}
+
+/* High specificity (modal class + element) so theme input/textarea rules don't
+   override the padding and break the title/description alignment. */
+.bk-create-modal input.bk-create-title {
+	width: 100%;
+	border: none;
+	background: transparent;
+	box-shadow: none;
+	font-size: 1.3rem;
+	font-weight: 700;
+	line-height: 1.3;
+	/* Flush-left; the modal content padding provides the inset. */
+	padding: 0;
+	margin: 0;
+	color: var(--text-normal);
+}
+
+.bk-create-modal input.bk-create-title:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.bk-create-modal input.bk-create-title::placeholder {
+	color: var(--text-muted);
+	font-weight: 700;
+	opacity: 0.55;
+}
+
+.bk-create-modal textarea.bk-create-desc::placeholder {
+	color: var(--text-muted);
+	opacity: 0.55;
+}
+
+.bk-create-modal textarea.bk-create-desc {
+	width: 100%;
+	border: none;
+	background: transparent;
+	box-shadow: none;
+	resize: none;
+	min-height: 72px;
+	font-size: 1rem;
+	line-height: 1.4;
+	/* Flush-left, matching the title, with breathing room below it. */
+	padding: 0;
+	margin: 12px 0 0;
+	color: var(--text-normal);
+	font-family: inherit;
+	text-align: left;
+}
+
+.bk-create-modal textarea.bk-create-desc:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.bk-create-desc:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.bk-create-pills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+	padding: 10px 0;
+}
+
+.bk-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 14px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-normal);
+	cursor: pointer;
+	background: var(--background-primary);
+	transition: background-color 80ms ease, border-color 80ms ease;
+}
+
+.bk-pill:hover {
+	background: var(--background-modifier-hover);
+}
+
+.bk-pill .bk-icon {
+	width: 15px;
+	height: 15px;
+}
+
+.bk-pill-icon {
+	display: inline-flex;
+}
+
+.bk-pill-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.bk-create-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	border-top: 1px solid var(--background-modifier-border);
+	padding-top: 12px;
+	margin-top: 6px;
+}
+
+.bk-create-footer-left {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.bk-attach-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+	cursor: pointer;
+	color: var(--text-muted);
+	transition: background-color 80ms ease, color 80ms ease;
+}
+
+.bk-attach-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.bk-attach-btn svg {
+	width: 16px;
+	height: 16px;
+}
+
+.bk-create-more {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+/* ---- Attachments ------------------------------------------- */
+
+.bk-create-attachments {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 4px 0 8px;
+}
+
+.bk-create-attachments.is-empty {
+	display: none;
+}
+
+.bk-attachment {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 220px;
+	padding: 4px 6px 4px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+}
+
+.bk-attachment-thumb {
+	width: 28px;
+	height: 28px;
+	object-fit: cover;
+	border-radius: 4px;
+	flex: 0 0 auto;
+}
+
+.bk-attachment-icon {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+
+.bk-attachment-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.bk-attachment-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-normal);
+}
+
+.bk-attachment-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 4px;
+	cursor: pointer;
+	color: var(--text-muted);
+	flex: 0 0 auto;
+	transition: background-color 80ms ease, color 80ms ease;
+}
+
+.bk-attachment-remove:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.bk-attachment-remove svg {
+	width: 13px;
+	height: 13px;
+}
+
+.bk-create-modal.bk-drag-over {
+	outline: 2px dashed var(--color-accent);
+	outline-offset: -6px;
+}
+
+.bk-toggle {
+	width: 30px;
+	height: 17px;
+	border-radius: 9px;
+	background: var(--background-modifier-border);
+	position: relative;
+	cursor: pointer;
+	transition: background-color 120ms ease;
+}
+
+.bk-toggle::after {
+	content: "";
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 13px;
+	height: 13px;
+	border-radius: 50%;
+	background: var(--background-primary);
+	transition: transform 120ms var(--motion-ease-enter);
+}
+
+.bk-toggle.is-on {
+	background: var(--color-accent);
+}
+
+.bk-toggle.is-on::after {
+	transform: translateX(13px);
+}
+
+.bk-create-submit {
+	cursor: pointer;
+}
+
+/* ---- Motion: surfaces -------------------------------------- */
+
+.motion-surface {
+	--motion-surface-start-transform: translateY(calc(var(--motion-distance-xs) * -1)) scale(var(--motion-scale-from));
+	transform-origin: var(--motion-transform-origin, top left);
+	will-change: opacity, transform;
+}
+
+.motion-surface[data-side="top"] {
+	--motion-surface-start-transform: translateY(var(--motion-distance-xs)) scale(var(--motion-scale-from));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.motion-surface[data-state="open"] {
+		animation: motion-surface-enter var(--motion-duration-basic) var(--motion-ease-enter);
+	}
+	.motion-surface[data-state="closed"] {
+		animation: motion-surface-exit var(--motion-duration-basic) var(--motion-ease-exit-snappy);
+	}
+}
+
+@keyframes motion-surface-enter {
+	from {
+		opacity: 0;
+		transform: var(--motion-surface-start-transform);
+	}
+	to {
+		opacity: 1;
+		transform: translate(0, 0) scale(1);
+	}
+}
+
+@keyframes motion-surface-exit {
+	from {
+		opacity: 1;
+		transform: translate(0, 0) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: var(--motion-surface-start-transform);
+	}
+}
+
+/* ---- Motion: dialog ---------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+	.modal.bk-create-modal.motion-dialog {
+		animation: motion-dialog-enter var(--motion-duration-relaxed) var(--motion-ease-enter);
+	}
+}
+
+@keyframes motion-dialog-enter {
+	from {
+		opacity: 0;
+		transform: translateY(var(--motion-distance-sm)) scale(var(--motion-scale-from));
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+/* Exit is the inverse of the entrance (snappier curve). */
+.modal.bk-create-modal.bk-dialog-closing {
+	animation: motion-dialog-exit var(--motion-duration-basic) var(--motion-ease-exit-snappy) forwards;
+}
+
+@keyframes motion-dialog-exit {
+	from {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(var(--motion-distance-sm)) scale(var(--motion-scale-from));
+	}
+}
+
+.modal-bg.bk-overlay-closing {
+	animation: bk-overlay-out var(--motion-duration-basic) ease forwards;
+}
+
+@keyframes bk-overlay-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.motion-surface,
+	.motion-dialog,
+	.bk-dialog-closing,
+	.bk-overlay-closing {
+		animation: none !important;
+	}
+}
+
+/* ---- Empty-column konbini (cute animated ASCII cat) -------- */
+
+.bk-empty-konbini {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 18px 0 12px;
+	color: var(--text-faint);
+	user-select: none;
+}
+
+/* Fade + rise in when a column empties out. */
+@media (prefers-reduced-motion: no-preference) {
+	.bk-empty-konbini {
+		animation: bk-konbini-in var(--motion-duration-relaxed) var(--motion-ease-enter);
+	}
+}
+
+@keyframes bk-konbini-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px) scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.bk-konbini-label {
+	font-size: 9px;
+	letter-spacing: 2px;
+	color: var(--text-muted);
+	opacity: 0.7;
+}
+
+.bk-ascii {
+	position: relative;
+	display: inline-block;
+}
+
+.bk-ascii-frame {
+	margin: 0;
+	padding: 0;
+	font-family: var(--font-monospace);
+	font-size: 11px;
+	line-height: 1.2;
+	color: var(--text-muted);
+	white-space: pre;
+	text-align: left;
+}
+
+/* Stack frames; the first stays in flow to size the box. */
+.bk-ascii-frame:not(:first-child) {
+	position: absolute;
+	inset: 0;
+}
+
+/* Two-frame idle loop: each frame shows for half the cycle. */
+@media (prefers-reduced-motion: no-preference) {
+	.bk-ascii-frame {
+		opacity: 0;
+		animation: bk-ascii-cycle 1.3s steps(1, end) infinite;
+	}
+	.bk-ascii-frame:nth-child(1) { animation-delay: 0s; }
+	.bk-ascii-frame:nth-child(2) { animation-delay: 0.65s; }
+}
+
+/* Reduced motion: just show the first frame. */
+@media (prefers-reduced-motion: reduce) {
+	.bk-ascii-frame:not(:first-child) {
+		opacity: 0;
+	}
+}
+
+@keyframes bk-ascii-cycle {
+	0%, 50% { opacity: 1; }
+	50.01%, 100% { opacity: 0; }
+}
+
+.bk-empty-caption {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	margin-top: 2px;
+}
+
+/* ---- Emoji glyphs (custom status/priority/label) ----------- */
+
+.bk-emoji {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	font-size: 14px;
+	line-height: 1;
+	flex: 0 0 auto;
+}
+
+/* ---- Popover delete button + create-definition form -------- */
+
+.bk-popover-item {
+	position: relative;
+}
+
+.bk-popover-del,
+.bk-popover-edit {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 4px;
+	color: var(--text-faint);
+	opacity: 0;
+	flex: 0 0 auto;
+	transition: opacity 80ms ease, background-color 80ms ease, color 80ms ease;
+}
+
+.bk-popover-item:hover .bk-popover-del,
+.bk-popover-item:hover .bk-popover-edit {
+	opacity: 1;
+}
+
+.bk-popover-edit:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.bk-popover-edit svg {
+	width: 13px;
+	height: 13px;
+}
+
+.bk-popover-del:hover {
+	background: var(--background-modifier-error-hover, var(--background-modifier-hover));
+	color: var(--text-error, var(--text-normal));
+}
+
+.bk-popover-del svg {
+	width: 13px;
+	height: 13px;
+}
+
+.bk-defform {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 6px 6px 8px;
+}
+
+.bk-defform-title {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.bk-defform-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.bk-emoji-input {
+	width: 40px;
+	text-align: center;
+	font-size: 18px;
+	padding: 4px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	flex: 0 0 auto;
+}
+
+.bk-emoji-input:focus {
+	outline: none;
+	border-color: var(--color-accent);
+}
+
+.bk-swatches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	flex: 1;
+}
+
+.bk-swatch {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	cursor: pointer;
+	box-shadow: 0 0 0 1px var(--background-modifier-border) inset;
+	transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.bk-swatch:hover {
+	transform: scale(1.12);
+}
+
+.bk-swatch.is-selected {
+	box-shadow: 0 0 0 2px var(--background-primary) inset, 0 0 0 4px currentColor;
+	color: var(--text-normal);
+}
+
+.bk-defform-btn {
+	align-self: flex-end;
+	cursor: pointer;
+}
+
+/* ---- Column menu + hidden-columns panel -------------------- */
+
+.bk-column-menu {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 5px;
+	cursor: pointer;
+	color: var(--text-muted);
+	opacity: 0;
+	transition: opacity 80ms ease, background-color 80ms ease, color 80ms ease;
+}
+
+.bk-column-header:hover .bk-column-menu {
+	opacity: 1;
+}
+
+.bk-column-menu:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.bk-column-menu svg {
+	width: 15px;
+	height: 15px;
+}
+
+.bk-hidden-panel {
+	flex: 0 0 220px;
+	align-self: flex-start;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px;
+	border-radius: 10px;
+	border: 1px dashed var(--background-modifier-border);
+}
+
+.bk-hidden-title {
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	color: var(--text-muted);
+	padding: 4px 6px 6px;
+}
+
+.bk-hidden-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 8px;
+	border-radius: 7px;
+	cursor: pointer;
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	transition: background-color 80ms ease;
+}
+
+.bk-hidden-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.bk-hidden-label {
+	flex: 1;
+}
+
+.bk-hidden-count {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
