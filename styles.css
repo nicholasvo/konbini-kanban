@@ -986,11 +986,14 @@ body.bk-dragging {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.motion-surface,
-	.motion-dialog,
-	.bk-dialog-closing,
-	.bk-overlay-closing {
-		animation: none !important;
+	/* Match the specificity of each animated selector above so source order
+	   (this block comes last) wins without needing !important. */
+	.motion-surface[data-state="open"],
+	.motion-surface[data-state="closed"],
+	.modal.bk-create-modal.motion-dialog,
+	.modal.bk-create-modal.bk-dialog-closing,
+	.modal-bg.bk-overlay-closing {
+		animation: none;
 	}
 }
 
