@@ -74,27 +74,27 @@ function asDate(v: unknown): string | null {
 }
 
 export async function setStatus(app: App, file: TFile, cfg: KanbanConfig, status: string): Promise<void> {
-	await app.fileManager.processFrontMatter(file, (fm) => {
+	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		fm[cfg.statusProp] = status;
 	});
 }
 
 export async function setPriority(app: App, file: TFile, cfg: KanbanConfig, priority: string): Promise<void> {
-	await app.fileManager.processFrontMatter(file, (fm) => {
+	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		if (priority === "no priority") delete fm[cfg.priorityProp];
 		else fm[cfg.priorityProp] = priority;
 	});
 }
 
 export async function setLabels(app: App, file: TFile, cfg: KanbanConfig, labels: string[]): Promise<void> {
-	await app.fileManager.processFrontMatter(file, (fm) => {
+	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		if (labels.length === 0) delete fm[cfg.labelsProp];
 		else fm[cfg.labelsProp] = labels;
 	});
 }
 
 export async function setTitle(app: App, file: TFile, cfg: KanbanConfig, title: string): Promise<void> {
-	await app.fileManager.processFrontMatter(file, (fm) => {
+	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		fm[cfg.titleProp] = title;
 	});
 }
@@ -107,7 +107,7 @@ export async function setDate(
 	value: string | null
 ): Promise<void> {
 	const prop = which === "start" ? cfg.startDateProp : cfg.endDateProp;
-	await app.fileManager.processFrontMatter(file, (fm) => {
+	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		if (value) fm[prop] = value;
 		else delete fm[prop];
 	});
@@ -166,7 +166,7 @@ async function uniquePath(app: App, folder: string, name: string): Promise<strin
 export async function createTask(app: App, cfg: KanbanConfig, spec: NewTaskSpec): Promise<TFile> {
 	const path = await uniquePath(app, spec.folder, slugify(spec.title));
 	const file = await app.vault.create(path, spec.description ? `\n${spec.description}\n` : "");
-	await app.fileManager.processFrontMatter(file, (fm) => {
+	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		fm[cfg.titleProp] = spec.title;
 		fm[cfg.statusProp] = spec.status;
 		if (spec.priority && spec.priority !== "no priority") fm[cfg.priorityProp] = spec.priority;

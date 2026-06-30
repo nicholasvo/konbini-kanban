@@ -1,4 +1,13 @@
-import { Plugin, Notice, PluginSettingTab, Setting, App, TFile, normalizePath } from "obsidian";
+import {
+	Plugin,
+	Notice,
+	PluginSettingTab,
+	Setting,
+	App,
+	TFile,
+	normalizePath,
+	type BasesViewRegistration,
+} from "obsidian";
 import {
 	KANBAN_VIEW_TYPE,
 	StatusDef,
@@ -66,8 +75,8 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		this.addSettingTab(new KonbiniSettingTab(this.app, this));
 
 		// registerBasesView returns false when Bases is not enabled in the vault.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const register = (this as any).registerBasesView?.bind(this);
+		// Older Obsidian versions lack the method entirely, so guard for it.
+		const register = this.registerBasesView?.bind(this);
 		if (typeof register !== "function") {
 			new Notice("Konbini Kanban: this Obsidian version has no Bases view API.");
 			return;
@@ -76,9 +85,10 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		const ok = register(KANBAN_VIEW_TYPE, {
 			name: "Kanban",
 			icon: "square-kanban",
-			factory: (controller: unknown, containerEl: HTMLElement) =>
-				new KanbanBasesView(controller, containerEl, this),
-			options: viewOptions,
+			factory: (controller, containerEl) => new KanbanBasesView(controller, containerEl, this),
+			// viewOptions widens each entry's `type` to `string`; the values are
+			// valid text options, so re-assert the registration's option type.
+			options: viewOptions as unknown as BasesViewRegistration["options"],
 		});
 
 		if (ok === false) {
@@ -156,7 +166,8 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	/** Show or hide a status column across all open boards. */
 	async setStatusHidden(key: string, hidden: boolean): Promise<void> {
 		const set = new Set(this.data.hiddenStatuses);
-		hidden ? set.add(key) : set.delete(key);
+		if (hidden) set.add(key);
+		else set.delete(key);
 		this.data.hiddenStatuses = Array.from(set);
 		await this.saveData(this.data);
 		for (const board of this.boards) board.refresh();
@@ -200,7 +211,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			);
 		}
 		if (file instanceof TFile) {
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
+			await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 				fm[DEFAULTS.statusProp] = statuses;
 				fm[DEFAULTS.priorityProp] = priorities;
 				fm[DEFAULTS.labelsProp] = labels;

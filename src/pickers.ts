@@ -18,10 +18,9 @@ function mountPopover(anchor: HTMLElement, build: (body: HTMLElement, close: () 
 	// Mount inside the modal container when invoked from a modal, so the modal's
 	// focus trap doesn't fight the popover's search input — that focus war is the
 	// cause of the open/close flicker. Falls back to the body on the board.
-	const host = (anchor.closest(".modal-container") as HTMLElement | null) ?? document.body;
-	const el = host.createDiv("bk-popover motion-surface");
+	const host = anchor.closest<HTMLElement>(".modal-container") ?? activeDocument.body;
 	// Hide until positioned so the entrance never paints at the wrong spot.
-	el.style.visibility = "hidden";
+	const el = host.createDiv("bk-popover motion-surface bk-popover-hidden");
 
 	// Decide vertical placement; prefer opening downward.
 	const below = rect.bottom + 8;
@@ -35,8 +34,8 @@ function mountPopover(anchor: HTMLElement, build: (body: HTMLElement, close: () 
 		closed = true;
 		window.clearTimeout(attachTimer);
 		el.dataset.state = "closed";
-		document.removeEventListener("pointerdown", onDown, true);
-		document.removeEventListener("keydown", onKey, true);
+		activeDocument.removeEventListener("pointerdown", onDown, true);
+		activeDocument.removeEventListener("keydown", onKey, true);
 		window.setTimeout(() => el.remove(), 160);
 	};
 
@@ -49,12 +48,12 @@ function mountPopover(anchor: HTMLElement, build: (body: HTMLElement, close: () 
 	el.style.left = `${Math.max(8, left)}px`;
 	if (openUp) {
 		el.style.top = `${rect.top - 8 - el.offsetHeight}px`;
-		el.style.setProperty("--motion-transform-origin", "bottom left");
+		el.setCssProps({ "--motion-transform-origin": "bottom left" });
 	} else {
 		el.style.top = `${below}px`;
-		el.style.setProperty("--motion-transform-origin", "top left");
+		el.setCssProps({ "--motion-transform-origin": "top left" });
 	}
-	el.style.visibility = "";
+	el.removeClass("bk-popover-hidden");
 	el.dataset.state = "open";
 
 	const onDown = (e: PointerEvent) => {
@@ -71,8 +70,8 @@ function mountPopover(anchor: HTMLElement, build: (body: HTMLElement, close: () 
 	// Guard against the popover being closed before the timer fires.
 	attachTimer = window.setTimeout(() => {
 		if (closed) return;
-		document.addEventListener("pointerdown", onDown, true);
-		document.addEventListener("keydown", onKey, true);
+		activeDocument.addEventListener("pointerdown", onDown, true);
+		activeDocument.addEventListener("keydown", onKey, true);
 	}, 0);
 
 	return { close };
@@ -191,7 +190,8 @@ export function labelPopover(
 					});
 				}
 				row.onclick = () => {
-					chosen.has(label) ? chosen.delete(label) : chosen.add(label);
+					if (chosen.has(label)) chosen.delete(label);
+					else chosen.add(label);
 					commit();
 					render(input.value.toLowerCase());
 				};

@@ -14,6 +14,7 @@
 
 	--bk-card-radius: 8px;
 	--bk-gap: 8px;
+	--bk-urgent: #fc7840;
 }
 
 /* ---- Layout ------------------------------------------------ */
@@ -460,6 +461,14 @@ body.bk-dragging {
 	display: block;
 }
 
+.bk-icon-current {
+	color: currentColor;
+}
+
+.bk-icon-urgent {
+	color: var(--bk-urgent);
+}
+
 .bk-card-priority .bk-icon,
 .bk-card-status .bk-icon {
 	width: 16px;
@@ -467,6 +476,10 @@ body.bk-dragging {
 }
 
 /* ---- Popover (status / priority / labels) ------------------ */
+
+.bk-popover-hidden {
+	visibility: hidden;
+}
 
 .bk-popover {
 	position: fixed;
@@ -775,6 +788,10 @@ body.bk-dragging {
 }
 
 .bk-create-attachments.is-empty {
+	display: none;
+}
+
+.bk-file-input {
 	display: none;
 }
 

@@ -137,7 +137,6 @@ export class CreateTaskModal extends Modal {
 		this.attachmentsEl = contentEl.createDiv("bk-create-attachments");
 		this.fileInput = contentEl.createEl("input", { type: "file", cls: "bk-file-input" });
 		this.fileInput.setAttr("multiple", "true");
-		this.fileInput.style.display = "none";
 		this.fileInput.onchange = () => {
 			if (this.fileInput.files) void this.addFiles(this.fileInput.files);
 			this.fileInput.value = "";
@@ -302,8 +301,8 @@ export class CreateTaskModal extends Modal {
 
 	private reopenForNext(): void {
 		// Reset the inputs in place without closing the modal.
-		const title = this.contentEl.querySelector(".bk-create-title") as HTMLInputElement | null;
-		const desc = this.contentEl.querySelector(".bk-create-desc") as HTMLTextAreaElement | null;
+		const title = this.contentEl.querySelector<HTMLInputElement>(".bk-create-title");
+		const desc = this.contentEl.querySelector<HTMLTextAreaElement>(".bk-create-desc");
 		if (title) {
 			title.value = "";
 			title.focus();

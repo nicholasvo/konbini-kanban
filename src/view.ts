@@ -1,4 +1,5 @@
-import { App, TFile, Keymap, Menu, setIcon } from "obsidian";
+import { App, TFile, Keymap, Menu, setIcon, BasesView } from "obsidian";
+import type { QueryController } from "obsidian";
 import {
 	KANBAN_VIEW_TYPE,
 	StatusDef,
@@ -18,15 +19,7 @@ import {
 import { renderCard } from "./card";
 import { CreateTaskModal } from "./modal-create";
 import { renderEmptyKonbini } from "./konbini";
-
-/**
- * `BasesView` is provided by the Obsidian runtime (>= 1.10) but is not always in
- * the published typings, so we pull it off the module as a runtime value. Using
- * `require` (not a `declare`) ensures the binding actually exists at run time —
- * a `declare const` would type-check but emit nothing and crash on `extends`.
- */
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { BasesView } = require("obsidian") as { BasesView: any };
+import { statusGlyph } from "./icons";
 
 export interface ChildRollup {
 	done: number;
@@ -251,7 +244,6 @@ export class KanbanBoard {
 		this.columnsEl = this.rootEl.createDiv("bk-columns");
 		const buckets = this.bucketed();
 		const hidden = new Set(this.plugin.data.hiddenStatuses);
-		const { statusGlyph } = requireIcons();
 
 		for (const status of this.cfg.statuses) {
 			if (hidden.has(status.key)) continue;
@@ -445,10 +437,20 @@ export class KanbanBoard {
 	}
 }
 
-// Lazily require icons to avoid a hard import cycle in some bundlers.
-function requireIcons() {
-	// eslint-disable-next-line @typescript-eslint/no-var-requires
-	return require("./icons") as typeof import("./icons");
+/**
+ * Minimal shape of the runtime Bases query result we read from. The published
+ * typings expose `data`/`groupedData`, but the runtime also surfaces
+ * `ungroupedData` on some versions, so we model just the fields we touch.
+ */
+interface BasesEntryLike {
+	file?: TFile;
+}
+interface BasesGroupLike {
+	entries?: BasesEntryLike[];
+}
+interface BasesDataLike {
+	groupedData?: BasesGroupLike[];
+	ungroupedData?: BasesEntryLike[];
 }
 
 /**
@@ -459,9 +461,8 @@ export class KanbanBasesView extends BasesView {
 	private board: KanbanBoard;
 	private plugin: KonbiniKanbanPlugin;
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	constructor(controller: any, parentEl: HTMLElement, plugin: KonbiniKanbanPlugin) {
-		super(controller);
+	constructor(controller: unknown, parentEl: HTMLElement, plugin: KonbiniKanbanPlugin) {
+		super(controller as QueryController);
 		this.plugin = plugin;
 		const container = parentEl.createDiv("bk-view-container");
 		this.board = new KanbanBoard(this.app, container, plugin);
@@ -488,11 +489,10 @@ export class KanbanBasesView extends BasesView {
 	private collectFiles(): TFile[] {
 		const out: TFile[] = [];
 		const seen = new Set<string>();
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const data: any = this.data;
+		const data = this.data as unknown as BasesDataLike;
 		const groups = data?.groupedData ?? [];
-		const pushEntry = (entry: any) => {
-			const file = entry?.file as TFile | undefined;
+		const pushEntry = (entry: BasesEntryLike): void => {
+			const file = entry?.file;
 			// Never show the plugin's typeahead seed note as a task.
 			if (file && file.path !== SEED_NOTE_PATH && !seen.has(file.path)) {
 				seen.add(file.path);
@@ -513,7 +513,12 @@ export class KanbanBasesView extends BasesView {
 		}
 		let best = "";
 		let bestN = -1;
-		for (const [dir, n] of counts) if (n > bestN) (best = dir), (bestN = n);
+		for (const [dir, n] of counts) {
+			if (n > bestN) {
+				best = dir;
+				bestN = n;
+			}
+		}
 		return best === "/" ? "" : best;
 	}
 }

@@ -40,19 +40,19 @@ export function startCardDrag(
 	};
 
 	const onUp = () => {
-		document.removeEventListener("pointermove", onMove);
-		document.removeEventListener("pointerup", onUp);
+		activeDocument.removeEventListener("pointermove", onMove);
+		activeDocument.removeEventListener("pointerup", onUp);
 		if (!started) return;
 		// Swallow the click that follows the drag so the note doesn't open.
-		document.addEventListener("click", (ev) => {
+		activeDocument.addEventListener("click", (ev) => {
 			ev.stopPropagation();
 			ev.preventDefault();
 		}, { capture: true, once: true });
 		drop();
 	};
 
-	document.addEventListener("pointermove", onMove);
-	document.addEventListener("pointerup", onUp);
+	activeDocument.addEventListener("pointermove", onMove);
+	activeDocument.addEventListener("pointerup", onUp);
 
 	function begin(): void {
 		const rect = cardEl.getBoundingClientRect();
@@ -64,10 +64,10 @@ export function startCardDrag(
 		ghost.style.width = `${rect.width}px`;
 		ghost.style.left = `${rect.left}px`;
 		ghost.style.top = `${rect.top}px`;
-		document.body.appendChild(ghost);
+		activeDocument.body.appendChild(ghost);
 
 		cardEl.addClass("bk-card-placeholder");
-		document.body.addClass("bk-dragging");
+		activeDocument.body.addClass("bk-dragging");
 	}
 
 	function siblings(body: HTMLElement): HTMLElement[] {
@@ -102,7 +102,7 @@ export function startCardDrag(
 	}
 
 	function drop(): void {
-		document.body.removeClass("bk-dragging");
+		activeDocument.body.removeClass("bk-dragging");
 		board.highlightColumn(null);
 		const targetStatus = cardEl.closest<HTMLElement>(".bk-column")?.dataset.status ?? task.status;
 

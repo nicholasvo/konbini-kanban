@@ -2,7 +2,7 @@ import { StatusIconKind, PriorityIconKind, StatusDef, PriorityDef } from "./cons
 
 /** An emoji glyph wrapped to sit where a 16px icon would. */
 function emojiSpan(emoji: string): HTMLSpanElement {
-	const span = document.createElement("span");
+	const span = activeDocument.createElement("span");
 	span.className = "bk-emoji";
 	span.textContent = emoji;
 	return span;
@@ -28,7 +28,7 @@ export function priorityGlyph(def: PriorityDef): Node {
  */
 
 function svg(width = 16, height = 16): SVGSVGElement {
-	const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+	const el = activeDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
 	el.setAttribute("viewBox", "0 0 16 16");
 	el.setAttribute("width", String(width));
 	el.setAttribute("height", String(height));
@@ -38,7 +38,7 @@ function svg(width = 16, height = 16): SVGSVGElement {
 }
 
 function child(parent: SVGElement, tag: string, attrs: Record<string, string>): SVGElement {
-	const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+	const el = activeDocument.createElementNS("http://www.w3.org/2000/svg", tag);
 	for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
 	parent.appendChild(el);
 	return el;
@@ -96,7 +96,7 @@ export function statusIcon(kind: StatusIconKind, color: string): SVGSVGElement {
 /** Vertical signal bars used by high/medium/low. */
 function bars(filled: number): SVGSVGElement {
 	const el = svg();
-	el.style.color = "currentColor";
+	el.addClass("bk-icon-current");
 	const cfg = [
 		{ x: 1.5, y: 9.5, h: 4.5 },
 		{ x: 6.25, y: 6.5, h: 7.5 },
@@ -120,7 +120,7 @@ export function priorityIcon(kind: PriorityIconKind): SVGSVGElement {
 		case "low": return bars(1);
 		case "urgent": {
 			const el = svg();
-			el.style.color = "#fc7840";
+			el.addClass("bk-icon-urgent");
 			child(el, "rect", {
 				x: "1.5", y: "1.5", width: "13", height: "13", rx: "3.5",
 				fill: "currentColor",
@@ -132,7 +132,7 @@ export function priorityIcon(kind: PriorityIconKind): SVGSVGElement {
 		case "none":
 		default: {
 			const el = svg();
-			el.style.color = "currentColor";
+			el.addClass("bk-icon-current");
 			[2, 7, 12].forEach((x) => {
 				child(el, "rect", {
 					x: String(x), y: "7.25", width: "2.5", height: "1.5", rx: "0.75",
