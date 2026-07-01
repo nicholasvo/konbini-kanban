@@ -14,6 +14,7 @@ A Linear-style kanban board rendered as a **custom [Obsidian Bases](https://help
 - **Start & end dates** — pick dates in the create modal or on a card; overdue due dates turn red.
 - **Attachments** — attach images and other files via the create modal (paperclip, drag-drop, or paste); they're imported into the vault and embedded.
 - **Quick create** — a Linear-style "New task" modal (`+` on any column header, or the branch icon on a card for a sub-task).
+- **Templates** — define reusable description bodies in plugin settings, then drop one into a new task from the **Template** pill in the create modal.
 - **Konbini pixel art** — a delightful animated convenience-store scene along the bottom of the board. Toggle it off in plugin settings.
 - **Configurable** — every property name and the column set are remappable in the view's options; defaults match the screenshots out of the box.
 

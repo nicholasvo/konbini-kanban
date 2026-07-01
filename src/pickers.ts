@@ -214,6 +214,39 @@ export function labelPopover(
 	});
 }
 
+export function templatePopover(
+	anchor: HTMLElement,
+	board: KanbanBoard,
+	current: string | null,
+	onPick: (name: string) => void | Promise<void>
+): void {
+	mountPopover(anchor, (body, close) => {
+		const templates = board.plugin.data.templates;
+		if (templates.length === 0) {
+			const empty = body.createDiv("bk-popover-empty");
+			empty.setText("No templates — add them in settings.");
+			return;
+		}
+		const input = searchHeader(body, "Apply template...");
+		const list = body.createDiv("bk-popover-list");
+		const render = (q: string) => {
+			list.empty();
+			for (const t of templates.filter((t) => t.name.toLowerCase().includes(q))) {
+				const row = list.createDiv("bk-popover-item");
+				setIcon(row.createSpan("bk-popover-icon"), "file-text");
+				row.createSpan({ cls: "bk-popover-label", text: t.name });
+				if (t.name === current) markSelected(row);
+				row.onclick = () => {
+					void onPick(t.name);
+					close();
+				};
+			}
+		};
+		render("");
+		input.oninput = () => render(input.value.toLowerCase());
+	});
+}
+
 /** Small trash button revealed on a row for user-defined entries. */
 function addDeleteBtn(row: HTMLElement, onDelete: () => void | Promise<void>): void {
 	const del = row.createSpan("bk-popover-del");

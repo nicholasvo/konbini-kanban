@@ -579,6 +579,43 @@ body.bk-dragging {
 	color: var(--text-muted);
 }
 
+.bk-popover-icon {
+	display: inline-flex;
+	color: var(--text-muted);
+	flex: 0 0 auto;
+}
+
+.bk-popover-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.bk-popover-empty {
+	padding: 10px 10px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+
+/* Template editor: let the body textarea use the full modal width. */
+.bk-template-body-setting {
+	display: block;
+}
+
+.bk-template-body-setting .setting-item-info {
+	margin-bottom: 6px;
+}
+
+.bk-template-body-setting .setting-item-control {
+	justify-content: stretch;
+}
+
+.bk-template-body-setting textarea {
+	width: 100%;
+	min-height: 140px;
+	resize: vertical;
+	font-family: var(--font-text);
+}
+
 .bk-date-input {
 	width: 100%;
 	border: 1px solid var(--background-modifier-border);

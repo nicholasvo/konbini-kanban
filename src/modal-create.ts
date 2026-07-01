@@ -2,7 +2,7 @@ import { Modal, TFile, setIcon, Notice } from "obsidian";
 import type { KanbanBoard } from "./view";
 import { createTask, PendingAttachment } from "./data";
 import { statusGlyph, priorityGlyph } from "./icons";
-import { statusPopover, priorityPopover, labelPopover, datePopover } from "./pickers";
+import { statusPopover, priorityPopover, labelPopover, datePopover, templatePopover } from "./pickers";
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
 
@@ -30,6 +30,7 @@ export class CreateTaskModal extends Modal {
 	private startDate: string | null = null;
 	private endDate: string | null = null;
 	private attachments: PendingAttachment[] = [];
+	private template: string | null = null;
 	private createMore = false;
 
 	private statusPill!: HTMLElement;
@@ -37,6 +38,8 @@ export class CreateTaskModal extends Modal {
 	private labelPill!: HTMLElement;
 	private startPill!: HTMLElement;
 	private endPill!: HTMLElement;
+	private templatePill!: HTMLElement;
+	private descInput!: HTMLTextAreaElement;
 	private attachmentsEl!: HTMLElement;
 	private fileInput!: HTMLInputElement;
 
@@ -96,6 +99,7 @@ export class CreateTaskModal extends Modal {
 		const descInput = contentEl.createEl("textarea", { cls: "bk-create-desc" });
 		descInput.setAttr("placeholder", "Add description…");
 		descInput.oninput = () => (this.description = descInput.value);
+		this.descInput = descInput;
 
 		// Pill row.
 		const pills = contentEl.createDiv("bk-create-pills");
@@ -105,6 +109,7 @@ export class CreateTaskModal extends Modal {
 		this.labelPill = pills.createDiv("bk-pill");
 		this.startPill = pills.createDiv("bk-pill");
 		this.endPill = pills.createDiv("bk-pill");
+		this.templatePill = pills.createDiv("bk-pill");
 		this.refreshPills();
 
 		this.statusPill.onclick = () =>
@@ -132,6 +137,8 @@ export class CreateTaskModal extends Modal {
 				this.endDate = value;
 				this.refreshPills();
 			});
+		this.templatePill.onclick = () =>
+			templatePopover(this.templatePill, this.board, this.template, (name) => this.applyTemplate(name));
 
 		// Attachments preview + hidden file input.
 		this.attachmentsEl = contentEl.createDiv("bk-create-attachments");
@@ -195,6 +202,22 @@ export class CreateTaskModal extends Modal {
 		});
 
 		window.setTimeout(() => titleInput.focus(), 20);
+	}
+
+	/** Replace the description with a template's body (confirming any overwrite). */
+	private applyTemplate(name: string): void {
+		const tpl = this.board.plugin.data.templates.find((t) => t.name === name);
+		if (!tpl) return;
+		const hasText = this.descInput.value.trim().length > 0;
+		if (hasText && this.descInput.value !== tpl.body) {
+			const ok = window.confirm("Replace the current description with this template?");
+			if (!ok) return;
+		}
+		this.description = tpl.body;
+		this.descInput.value = tpl.body;
+		this.template = name;
+		this.refreshPills();
+		this.descInput.focus();
 	}
 
 	/** Read selected/dropped/pasted files into memory and show them. */
@@ -263,6 +286,11 @@ export class CreateTaskModal extends Modal {
 		setIcon(this.endPill.createSpan("bk-pill-icon"), "calendar-check");
 		this.endPill.createSpan({ text: this.endDate ? `Due ${fmtDate(this.endDate)}` : "End date" });
 		this.endPill.toggleClass("is-set", !!this.endDate);
+
+		this.templatePill.empty();
+		setIcon(this.templatePill.createSpan("bk-pill-icon"), "file-text");
+		this.templatePill.createSpan({ text: this.template ?? "Template" });
+		this.templatePill.toggleClass("is-set", !!this.template);
 		void cfg;
 	}
 
@@ -291,6 +319,7 @@ export class CreateTaskModal extends Modal {
 			this.startDate = null;
 			this.endDate = null;
 			this.attachments = [];
+			this.template = null;
 			this.renderAttachments();
 			this.reopenForNext();
 		} else {

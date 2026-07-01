@@ -42,6 +42,12 @@ export interface LabelDef {
 	emoji?: string;
 }
 
+/** A named description-body template (user-defined), applied on task create. */
+export interface Template {
+	name: string;
+	body: string;
+}
+
 /**
  * Default status set, mirroring Linear's workflow states. Frontmatter stores
  * the `key` string. The order here is the left-to-right column order.

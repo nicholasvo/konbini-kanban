@@ -4,6 +4,7 @@ import {
 	PluginSettingTab,
 	Setting,
 	App,
+	Modal,
 	TFile,
 	normalizePath,
 	type BasesViewRegistration,
@@ -13,6 +14,7 @@ import {
 	StatusDef,
 	PriorityDef,
 	LabelDef,
+	Template,
 	DEFAULT_STATUSES,
 	DEFAULT_PRIORITIES,
 	DEFAULT_LABELS,
@@ -27,6 +29,7 @@ interface KanbanData {
 	customStatuses: StatusDef[];
 	customPriorities: PriorityDef[];
 	customLabels: LabelDef[];
+	templates: Template[];
 	hiddenStatuses: string[];
 	pixelArt: boolean;
 	/** True once the default labels have been seeded (so we don't re-seed). */
@@ -38,6 +41,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		customStatuses: [],
 		customPriorities: [],
 		customLabels: [],
+		templates: [],
 		hiddenStatuses: [],
 		pixelArt: true,
 		initialized: false,
@@ -52,6 +56,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			customStatuses: loaded?.customStatuses ?? [],
 			customPriorities: loaded?.customPriorities ?? [],
 			customLabels: loaded?.customLabels ?? [],
+			templates: loaded?.templates ?? [],
 			hiddenStatuses: loaded?.hiddenStatuses ?? [],
 			pixelArt: loaded?.pixelArt ?? true,
 			initialized: loaded?.initialized ?? false,
@@ -132,6 +137,27 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	async removeCustomLabel(name: string): Promise<void> {
 		this.data.customLabels = this.data.customLabels.filter((l) => l.name !== name);
 		await this.persist();
+	}
+
+	/**
+	 * Add or overwrite a description-body template by name. Templates only feed
+	 * the create modal, so they skip the seed-note rewrite and board repaint.
+	 */
+	async saveTemplate(template: Template, originalName?: string): Promise<void> {
+		const key = originalName ?? template.name;
+		const existing = this.data.templates.find((t) => t.name === key);
+		if (existing) {
+			existing.name = template.name;
+			existing.body = template.body;
+		} else {
+			this.data.templates.push(template);
+		}
+		await this.saveData(this.data);
+	}
+
+	async removeTemplate(name: string): Promise<void> {
+		this.data.templates = this.data.templates.filter((t) => t.name !== name);
+		await this.saveData(this.data);
 	}
 
 	// Updates only change emoji/color (not the stored value), so they skip the
@@ -220,6 +246,83 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	}
 }
 
+/** One-line preview of a template body for the settings list. */
+function templatePreview(body: string): string {
+	const flat = body.replace(/\s+/g, " ").trim();
+	if (flat.length === 0) return "Empty template";
+	return flat.length > 80 ? `${flat.slice(0, 80)}…` : flat;
+}
+
+/** Modal for creating or editing a description-body template. */
+class TemplateEditModal extends Modal {
+	private original: Template | null;
+	private existingNames: string[];
+	private onSubmit: (template: Template) => void | Promise<void>;
+	private name: string;
+	private body: string;
+
+	constructor(
+		app: App,
+		original: Template | null,
+		existingNames: string[],
+		onSubmit: (template: Template) => void | Promise<void>
+	) {
+		super(app);
+		this.original = original;
+		this.existingNames = existingNames;
+		this.onSubmit = onSubmit;
+		this.name = original?.name ?? "";
+		this.body = original?.body ?? "";
+	}
+
+	onOpen(): void {
+		const { contentEl, titleEl } = this;
+		titleEl.setText(this.original ? "Edit template" : "New template");
+
+		new Setting(contentEl).setName("Name").addText((text) => {
+			text.setPlaceholder("Bug report").setValue(this.name);
+			text.onChange((v) => (this.name = v));
+			window.setTimeout(() => text.inputEl.focus(), 20);
+		});
+
+		new Setting(contentEl)
+			.setName("Description")
+			.setDesc("Text inserted into the new task's body.")
+			.setClass("bk-template-body-setting")
+			.addTextArea((area) => {
+				area.setPlaceholder("## Steps to reproduce\n\n## Expected\n\n## Actual").setValue(this.body);
+				area.onChange((v) => (this.body = v));
+				area.inputEl.rows = 8;
+			});
+
+		new Setting(contentEl).addButton((btn) =>
+			btn
+				.setButtonText(this.original ? "Save" : "Create")
+				.setCta()
+				.onClick(() => void this.submit())
+		);
+	}
+
+	private async submit(): Promise<void> {
+		const name = this.name.trim();
+		if (name.length === 0) {
+			new Notice("Template needs a name");
+			return;
+		}
+		const clash = this.existingNames.some((n) => n === name && n !== this.original?.name);
+		if (clash) {
+			new Notice("A template with that name already exists");
+			return;
+		}
+		await this.onSubmit({ name, body: this.body });
+		this.close();
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
 class KonbiniSettingTab extends PluginSettingTab {
 	private plugin: KonbiniKanbanPlugin;
 
@@ -238,6 +341,66 @@ class KonbiniSettingTab extends PluginSettingTab {
 			.addToggle((toggle) =>
 				toggle.setValue(this.plugin.data.pixelArt).onChange((value) => void this.plugin.setPixelArt(value))
 			);
+
+		// Description-body templates, picked from the create modal's Template pill.
+		new Setting(containerEl)
+			.setName("Task templates")
+			.setDesc("Reusable description text you can drop into a new task from the Template pill.")
+			.setHeading()
+			.addButton((btn) =>
+				btn
+					.setButtonText("Add template")
+					.setCta()
+					.onClick(() =>
+						new TemplateEditModal(
+							this.app,
+							null,
+							this.plugin.data.templates.map((t) => t.name),
+							async (template) => {
+								await this.plugin.saveTemplate(template);
+								this.display();
+							}
+						).open()
+					)
+			);
+
+		const templates = this.plugin.data.templates;
+		if (templates.length === 0) {
+			containerEl.createDiv({
+				cls: "setting-item-description",
+				text: "No templates yet — add one to reuse a description across tasks.",
+			});
+		}
+		for (const template of templates) {
+			new Setting(containerEl)
+				.setName(template.name)
+				.setDesc(templatePreview(template.body))
+				.addExtraButton((b) =>
+					b
+						.setIcon("pencil")
+						.setTooltip("Edit")
+						.onClick(() =>
+							new TemplateEditModal(
+								this.app,
+								template,
+								this.plugin.data.templates.map((t) => t.name),
+								async (edited) => {
+									await this.plugin.saveTemplate(edited, template.name);
+									this.display();
+								}
+							).open()
+						)
+				)
+				.addExtraButton((b) =>
+					b
+						.setIcon("trash-2")
+						.setTooltip("Delete")
+						.onClick(async () => {
+							await this.plugin.removeTemplate(template.name);
+							this.display();
+						})
+				);
+		}
 
 		// Only labels are user-definable; statuses and priorities are fixed.
 		new Setting(containerEl).setName("Custom labels").setHeading();
