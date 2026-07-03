@@ -6,5 +6,5 @@
 	"description": "Organize notes as a Linear-style kanban board in a Bases view, with status columns, drag-to-restatus, priority, labels, and sub-issues.",
 	"author": "nicholasvo",
 	"authorUrl": "https://github.com/nicholasvo",
-	"isDesktopOnly": false
+	"isDesktopOnly": true
 }
