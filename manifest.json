@@ -1,7 +1,7 @@
 {
 	"id": "konbini-kanban",
 	"name": "Konbini Kanban",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"minAppVersion": "1.10.0",
 	"description": "Organize notes as a Linear-style kanban board in a Bases view, with status columns, drag-to-restatus, priority, labels, and sub-issues.",
 	"author": "nicholasvo",
