@@ -18,6 +18,7 @@ import {
 } from "./data";
 import { renderCard } from "./card";
 import { CreateTaskModal } from "./modal-create";
+import { EditTaskModal } from "./modal-edit";
 import { renderEmptyKonbini } from "./konbini";
 import { statusGlyph } from "./icons";
 
@@ -25,6 +26,9 @@ export interface ChildRollup {
 	done: number;
 	total: number;
 }
+
+/** Below this board width we switch to the stacked, touch-friendly layout. */
+const NARROW_THRESHOLD = 600;
 
 /**
  * Holds everything a card needs and owns the column DOM. One board per view
@@ -44,6 +48,12 @@ export class KanbanBoard {
 	private columnsEl!: HTMLElement;
 	private columnBodyEls = new Map<string, HTMLElement>();
 
+	/** True when the board is in the stacked, touch-friendly narrow layout. */
+	private narrow = false;
+	private resizeObs: ResizeObserver;
+	/** Gates the FAB entrance so it plays once per narrow session, not per render. */
+	private fabEntered = false;
+
 	tasks: Task[] = [];
 	taskByPath = new Map<string, Task>();
 	knownLabels: string[] = [];
@@ -58,11 +68,50 @@ export class KanbanBoard {
 	private flipFrom: Map<string, DOMRect> | null = null;
 	private flipFocus: string | null = null;
 
+	// Path of a just-created card that should animate in once it next renders.
+	private enterPath: string | null = null;
+	private enterTimer = 0;
+
 	constructor(app: App, rootEl: HTMLElement, plugin: KonbiniKanbanPlugin) {
 		this.app = app;
 		this.plugin = plugin;
 		this.rootEl = rootEl;
 		this.rootEl.addClass("bk-root");
+
+		// Responsive: react to the pane's own width (not the viewport), so a board
+		// docked in a narrow sidebar stacks just like it does on a phone.
+		this.resizeObs = new ResizeObserver((entries) => {
+			const width = entries[0]?.contentRect.width ?? 0;
+			if (width === 0) return; // ignore the detached/hidden state
+			const next = width < NARROW_THRESHOLD;
+			if (next === this.narrow) return;
+			this.narrow = next;
+			// Leaving narrow arms the entrance again for the next time we enter.
+			if (!next) this.fabEntered = false;
+			this.rootEl.toggleClass("bk-narrow", next);
+			if (this.cfg) this.render();
+		});
+		this.resizeObs.observe(this.rootEl);
+	}
+
+	/** Stacked, touch-first layout active (narrow pane or mobile). */
+	isNarrow(): boolean {
+		return this.narrow;
+	}
+
+	/** Detach the resize observer when the view unloads. */
+	dispose(): void {
+		this.resizeObs.disconnect();
+		window.clearTimeout(this.enterTimer);
+	}
+
+	/** Repaint and play an entrance on the card at `path` once it renders. */
+	animateInCard(path: string): void {
+		this.enterPath = path;
+		window.clearTimeout(this.enterTimer);
+		// Safety net: stop waiting if the card never appears (e.g. filtered out).
+		this.enterTimer = window.setTimeout(() => (this.enterPath = null), 1500);
+		this.refresh();
 	}
 
 	private paletteColor(n: number): string {
@@ -239,6 +288,9 @@ export class KanbanBoard {
 		// .bk-columns starts at scrollLeft 0 and the FLIP animates every card
 		// sliding in from the side.
 		const prevScroll = this.columnsEl?.scrollLeft ?? 0;
+		// If a new card is about to appear, snapshot the current card positions so
+		// the surrounding cards can FLIP down to make room for it.
+		const enterFrom = this.enterPath ? this.captureRects() : null;
 		this.rootEl.empty();
 		this.columnBodyEls.clear();
 		this.columnsEl = this.rootEl.createDiv("bk-columns");
@@ -269,9 +321,21 @@ export class KanbanBoard {
 			for (const task of list) {
 				bodyEl.appendChild(renderCard(this, task));
 			}
-			if (list.length === 0) {
+			const isEmpty = list.length === 0;
+			if (isEmpty) {
 				if (this.plugin.data.pixelArt) bodyEl.appendChild(renderEmptyKonbini(status.key));
 				else bodyEl.createDiv({ cls: "bk-column-empty", text: "No tasks" });
+			}
+
+			// Hover-revealed add-task button — expands in under the last card, or
+			// under the empty-state pixel art. Narrow layout uses the FAB instead.
+			// Kept as the last body child (and hidden mid-drag via body.bk-dragging)
+			// so a dropped card lands above it rather than below.
+			if (!this.narrow) {
+				const addCard = bodyEl.createDiv("bk-column-addcard");
+				setIcon(addCard.createSpan("bk-column-addcard-icon"), "plus");
+				addCard.setAttr("aria-label", "New task");
+				addCard.onclick = () => this.openCreateModal(status.key);
 			}
 		}
 
@@ -290,6 +354,21 @@ export class KanbanBoard {
 			}
 		}
 
+		// Narrow layout: a first-class floating "New task" button, since the
+		// per-column "+" affordances are small and hard to reach on touch.
+		if (this.narrow) {
+			const fab = this.rootEl.createDiv("bk-fab");
+			// Animate only on the first render after entering narrow, so status
+			// edits (which re-render the whole board) don't replay the entrance.
+			if (!this.fabEntered) {
+				fab.addClass("bk-fab-enter");
+				this.fabEntered = true;
+			}
+			setIcon(fab, "plus");
+			fab.setAttr("aria-label", "New task");
+			fab.onclick = () => this.openCreateModal();
+		}
+
 		// Restore scroll before the FLIP measures final positions.
 		this.columnsEl.scrollLeft = prevScroll;
 
@@ -298,6 +377,36 @@ export class KanbanBoard {
 			this.flipFrom = null;
 			this.flipFocus = null;
 		}
+
+		// A just-created card animates in the first time it appears. Kept pending
+		// across renders until found, since the Bases query may only pick up the
+		// new note on a later data update.
+		if (this.enterPath) {
+			const el = this.rootEl.querySelector<HTMLElement>(
+				`.bk-card[data-path="${CSS.escape(this.enterPath)}"]`
+			);
+			if (el) {
+				window.clearTimeout(this.enterTimer);
+				this.enterPath = null;
+				// Slide the surrounding cards down to open the slot, then fade the
+				// new card into it. The new card has no prior rect, so the FLIP
+				// skips it and playEnter owns its animation.
+				if (enterFrom) this.playFlip(enterFrom, null);
+				this.playEnter(el);
+			}
+		}
+	}
+
+	/** Fade + settle a newly created card into place. */
+	private playEnter(el: HTMLElement): void {
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		el.animate(
+			[
+				{ opacity: 0, transform: "translateY(-6px) scale(0.97)" },
+				{ opacity: 1, transform: "translateY(0) scale(1)" },
+			],
+			{ duration: 300, easing: "cubic-bezier(0.19, 1, 0.22, 1)" }
+		);
 	}
 
 	/** Snapshot the on-screen rect of every top-level card, keyed by note path. */
@@ -378,6 +487,11 @@ export class KanbanBoard {
 			parent: parent ?? null,
 			folder: this.targetFolder,
 		}).open();
+	}
+
+	/** Open the touch-friendly edit sheet for an existing task. */
+	openEditModal(task: Task): void {
+		new EditTaskModal(this, task).open();
 	}
 
 	// --- Drag and drop (pointer-based; see dnd.ts) -------------------------
@@ -469,7 +583,10 @@ export class KanbanBasesView extends BasesView {
 		this.board.refresh = () => this.onDataUpdated();
 		// Track this board so settings changes can repaint it; drop it on unload.
 		plugin.boards.add(this.board);
-		this.register(() => plugin.boards.delete(this.board));
+		this.register(() => {
+			plugin.boards.delete(this.board);
+			this.board.dispose();
+		});
 	}
 
 	onDataUpdated(): void {

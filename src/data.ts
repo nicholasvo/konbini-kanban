@@ -113,6 +113,30 @@ export async function setDate(
 	});
 }
 
+/**
+ * Read a note's body — everything after the frontmatter block — with leading
+ * blank lines trimmed. This is what the editor surfaces as the "description".
+ */
+export async function readBody(app: App, file: TFile): Promise<string> {
+	const content = await app.vault.cachedRead(file);
+	const end = app.metadataCache.getFileCache(file)?.frontmatterPosition?.end?.offset;
+	const body = end != null ? content.slice(end) : content;
+	return body.replace(/^\s+/, "");
+}
+
+/**
+ * Replace a note's body while leaving its frontmatter untouched. Uses an atomic
+ * read-modify-write so a concurrent frontmatter edit can't clobber it.
+ */
+export async function setBody(app: App, file: TFile, body: string): Promise<void> {
+	await app.vault.process(file, (content) => {
+		const end = app.metadataCache.getFileCache(file)?.frontmatterPosition?.end?.offset;
+		const fmPart = end != null ? content.slice(0, end) : "";
+		const trimmed = body.trim();
+		return `${fmPart}${trimmed.length > 0 ? `\n\n${trimmed}\n` : "\n"}`;
+	});
+}
+
 /** Collect the distinct label values across a set of tasks, for the picker. */
 export function collectLabels(tasks: Task[]): string[] {
 	const set = new Set<string>();

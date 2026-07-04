@@ -1,4 +1,4 @@
-import { setIcon } from "obsidian";
+import { setIcon, Keymap } from "obsidian";
 import type { KanbanBoard } from "./view";
 import { Task, setStatus, setPriority, setLabels, setDate } from "./data";
 import { statusGlyph, priorityGlyph, rollupRing } from "./icons";
@@ -150,7 +150,7 @@ export function renderCard(board: KanbanBoard, task: Task): HTMLElement {
 		board.openCreateModal(board.cfg.defaultStatus, task.file);
 	};
 
-	// Open the note on plain click.
+	// Plain click opens the edit modal; Cmd/Ctrl-click jumps straight to the note.
 	cardEl.onclick = (e) => {
 		if (
 			(e.target as HTMLElement).closest(
@@ -158,11 +158,14 @@ export function renderCard(board: KanbanBoard, task: Task): HTMLElement {
 			)
 		)
 			return;
-		board.openFile(task.file, e);
+		if (Keymap.isModEvent(e)) board.openFile(task.file, e);
+		else board.openEditModal(task);
 	};
 
 	// Pointer-based drag (Linear-style floating card + live insertion gap).
+	// Disabled in the narrow layout — status changes go through the edit sheet.
 	cardEl.addEventListener("pointerdown", (e) => {
+		if (board.isNarrow()) return;
 		if ((e.target as HTMLElement).closest(
 			".bk-card-status, .bk-card-priority, .bk-card-addlabel, .bk-card-subadd, .bk-card-date-pill, .bk-card-rollup, .bk-sublist"
 		))
@@ -220,7 +223,8 @@ function renderSubRow(board: KanbanBoard, task: Task): HTMLElement {
 
 	row.onclick = (e) => {
 		if ((e.target as HTMLElement).closest(".bk-subrow-status, .bk-subrow-priority")) return;
-		board.openFile(task.file, e);
+		if (Keymap.isModEvent(e)) board.openFile(task.file, e);
+		else board.openEditModal(task);
 	};
 
 	// Recurse for grandchildren.

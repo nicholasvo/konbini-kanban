@@ -96,17 +96,29 @@ export function startCardDrag(
 		body.querySelector(".bk-column-empty, .bk-empty-konbini")?.remove();
 		const before = siblings(body)[index];
 		if (before) body.insertBefore(cardEl, before);
-		else body.appendChild(cardEl);
+		// Insert before the trailing add-task button (if any) so the card never
+		// lands beneath it — otherwise the button, reappearing above the card on
+		// drop, would push it down.
+		else {
+			const addBtn = body.querySelector(".bk-column-addcard");
+			if (addBtn) body.insertBefore(cardEl, addBtn);
+			else body.appendChild(cardEl);
+		}
 		board.highlightColumn(body);
 		board.playCardReflow(first);
 	}
 
 	function drop(): void {
-		activeDocument.body.removeClass("bk-dragging");
 		board.highlightColumn(null);
 		const targetStatus = cardEl.closest<HTMLElement>(".bk-column")?.dataset.status ?? task.status;
 
+		let settled = false;
 		const settle = () => {
+			if (settled) return;
+			settled = true;
+			// Drop the drag flag only now, so the add-task button stays suppressed
+			// through the ghost glide rather than flashing in behind the card.
+			activeDocument.body.removeClass("bk-dragging");
 			ghost?.remove();
 			ghost = null;
 			cardEl.removeClass("bk-card-placeholder");

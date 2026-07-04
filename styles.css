@@ -25,6 +25,10 @@
 	overflow: hidden;
 }
 
+.bk-root {
+	position: relative; /* anchor for the narrow-layout floating add button */
+}
+
 .bk-columns {
 	display: flex;
 	gap: 12px;
@@ -117,6 +121,60 @@
 	font-size: var(--font-ui-smaller);
 	text-align: center;
 	padding: 14px 0;
+}
+
+/* Hover-revealed add-task button: a plain rounded button with a centered plus.
+   Collapsed to nothing at rest (sitting under the cards, or under the empty-
+   state pixel art) and expands in on column hover. */
+.bk-column-addcard {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 0;
+	margin-top: 0;
+	border: 1px dashed var(--background-modifier-border);
+	border-width: 0;
+	border-radius: 7px;
+	color: var(--text-muted);
+	cursor: pointer;
+	opacity: 0;
+	overflow: hidden;
+	pointer-events: none;
+	transition:
+		height 150ms var(--motion-ease-enter),
+		margin-top 150ms var(--motion-ease-enter),
+		opacity 120ms ease,
+		background-color 80ms ease,
+		color 80ms ease,
+		border-color 80ms ease;
+}
+
+.bk-column:hover .bk-column-addcard {
+	height: 30px;
+	margin-top: 6px;
+	border-width: 1px;
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.bk-column-addcard:hover {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+	color: var(--text-normal);
+}
+
+.bk-column-addcard-icon {
+	display: inline-flex;
+}
+
+.bk-column-addcard-icon svg {
+	width: 17px;
+	height: 17px;
+}
+
+/* Out of layout while dragging so a dropped card lands at the true end. */
+body.bk-dragging .bk-column-addcard {
+	display: none;
 }
 
 /* When a column empties out (e.g. its last card was dragged away), the
@@ -679,9 +737,12 @@ body.bk-dragging {
 	border: none;
 	background: transparent;
 	box-shadow: none;
-	font-size: 1.3rem;
+	/* Track Obsidian's UI type scale rather than a frozen rem; tighten leading
+	   and tracking so the large title doesn't read airy. */
+	font-size: var(--font-ui-large);
 	font-weight: 700;
-	line-height: 1.3;
+	line-height: 1.15;
+	letter-spacing: -0.01em;
 	/* Flush-left; the modal content padding provides the inset. */
 	padding: 0;
 	margin: 0;
@@ -694,14 +755,14 @@ body.bk-dragging {
 }
 
 .bk-create-modal input.bk-create-title::placeholder {
-	color: var(--text-muted);
+	/* --text-faint is the purpose-built dim token; don't also stack opacity or
+	   the prompt becomes too weak to read. */
+	color: var(--text-faint);
 	font-weight: 700;
-	opacity: 0.55;
 }
 
 .bk-create-modal textarea.bk-create-desc::placeholder {
-	color: var(--text-muted);
-	opacity: 0.55;
+	color: var(--text-faint);
 }
 
 .bk-create-modal textarea.bk-create-desc {
@@ -711,8 +772,11 @@ body.bk-dragging {
 	box-shadow: none;
 	resize: none;
 	min-height: 72px;
+	/* Cap the measure so body text stays in the readable 45–75 char range even
+	   at the modal's full width. */
+	max-width: 62ch;
 	font-size: 1rem;
-	line-height: 1.4;
+	line-height: 1.45;
 	/* Flush-left, matching the title, with breathing room below it. */
 	padding: 0;
 	margin: 12px 0 0;
@@ -735,17 +799,19 @@ body.bk-dragging {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 7px;
-	padding: 10px 0;
+	/* Uniform 12px vertical rhythm with the status control above. */
+	padding: 12px 0;
 }
 
 .bk-pill {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	padding: 4px 10px;
+	/* 12px inset shares one left spine with the status control's glyph. */
+	padding: 4px 12px;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 14px;
-	font-size: var(--font-ui-smaller);
+	font-size: var(--font-ui-small);
 	color: var(--text-normal);
 	cursor: pointer;
 	background: var(--background-primary);
@@ -776,7 +842,8 @@ body.bk-dragging {
 	justify-content: space-between;
 	border-top: 1px solid var(--background-modifier-border);
 	padding-top: 12px;
-	margin-top: 6px;
+	/* Center the rule between the pills above and the buttons below. */
+	margin-top: 12px;
 }
 
 .bk-create-footer-left {
@@ -1029,7 +1096,8 @@ body.bk-dragging {
 	.motion-surface[data-state="closed"],
 	.modal.bk-create-modal.motion-dialog,
 	.modal.bk-create-modal.bk-dialog-closing,
-	.modal-bg.bk-overlay-closing {
+	.modal-bg.bk-overlay-closing,
+	.bk-fab.bk-fab-enter {
 		animation: none;
 	}
 }
@@ -1274,7 +1342,8 @@ body.bk-dragging {
 }
 
 .bk-hidden-panel {
-	flex: 0 0 220px;
+	/* Match the standard column width so the board keeps a single column grid. */
+	flex: 0 0 300px;
 	align-self: flex-start;
 	display: flex;
 	flex-direction: column;
@@ -1314,4 +1383,149 @@ body.bk-dragging {
 .bk-hidden-count {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+/* ---- Responsive / narrow (stacked, touch-first) layout ---- */
+
+/* Below ~600px the board stacks columns vertically and scrolls as one page,
+   rather than side-scrolling fixed-width columns. Drag is disabled in JS. */
+.bk-root.bk-narrow .bk-columns {
+	flex-direction: column;
+	align-items: stretch;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.bk-root.bk-narrow .bk-column {
+	flex: 0 0 auto;
+	width: 100%;
+	max-height: none;
+}
+
+/* Columns grow to fit their cards; the .bk-columns container owns the scroll. */
+.bk-root.bk-narrow .bk-column-body {
+	overflow-y: visible;
+}
+
+/* Roomier tap targets for the in-card controls on touch layouts. */
+.bk-root.bk-narrow .bk-card {
+	padding: 12px;
+}
+.bk-root.bk-narrow .bk-card-status,
+.bk-root.bk-narrow .bk-card-priority {
+	min-width: 28px;
+	min-height: 28px;
+}
+
+/* Floating, first-class "New task" button. */
+.bk-fab {
+	position: absolute;
+	/* Honor device safe areas so the button clears the home indicator on phones. */
+	right: calc(16px + env(safe-area-inset-right));
+	bottom: calc(16px + env(safe-area-inset-bottom));
+	width: 52px;
+	height: 52px;
+	border-radius: 50%;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	display: grid;
+	place-items: center;
+	/* Layered elevation: tight contact shadow + soft ambient + a hairline rim,
+	   so the edge stays crisp floating over cards of any color. */
+	box-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.2),
+		0 6px 16px rgba(0, 0, 0, 0.24),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+	cursor: pointer;
+	z-index: 20;
+	transition:
+		transform 120ms var(--motion-ease-enter),
+		box-shadow 120ms ease,
+		background-color 100ms ease;
+}
+
+/* One-time entrance, applied by the board only when the narrow layout is first
+   entered (not on every re-render). */
+@media (prefers-reduced-motion: no-preference) {
+	.bk-fab.bk-fab-enter {
+		animation: bk-fab-in var(--motion-duration-basic) var(--motion-ease-enter);
+	}
+}
+
+@keyframes bk-fab-in {
+	from {
+		opacity: 0;
+		transform: scale(var(--motion-scale-from));
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+/* Hover reads as a lift (rise + deepen ambient shadow); press snaps down. */
+.bk-fab:hover {
+	background: var(--interactive-accent-hover);
+	transform: translateY(-1px);
+	box-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.2),
+		0 10px 22px rgba(0, 0, 0, 0.26),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.bk-fab:active {
+	transform: scale(0.94);
+	transition: transform 100ms var(--motion-ease-exit-snappy);
+}
+.bk-fab svg {
+	width: 24px;
+	height: 24px;
+}
+
+/* ---- Edit sheet (mobile-first task editor) ---------------- */
+
+/* Prominent full-width status control — the primary way to re-status a card
+   when drag is unavailable. Tinted with the live status color (set as
+   --bk-status-color in JS) so it signals its status, not just via the glyph. */
+.bk-edit-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 12px 0 0;
+	padding: 10px 12px;
+	border-radius: var(--bk-card-radius);
+	background: color-mix(in srgb, var(--bk-status-color, transparent) 12%, var(--background-secondary));
+	/* Box-shadow border stays crisp on the tinted fill (a solid border muddies). */
+	box-shadow: inset 0 0 0 1px var(--background-modifier-border);
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	cursor: pointer;
+	transition:
+		background-color 100ms ease,
+		box-shadow 100ms ease,
+		transform 100ms var(--motion-ease-exit-snappy);
+}
+.bk-edit-status:hover {
+	background: color-mix(in srgb, var(--bk-status-color, transparent) 18%, var(--background-modifier-hover));
+	box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
+}
+.bk-edit-status:active {
+	transform: scale(0.99);
+}
+.bk-edit-status-label {
+	flex: 1;
+	font-weight: 600;
+}
+.bk-edit-status-chevron {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+/* Lock the chevron's weight to the 16px status glyph on the other end. */
+.bk-edit-status-chevron svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* "Open note" sits on the left; Save keeps its place on the right. */
+.bk-edit-modal .bk-create-footer .bk-edit-open {
+	margin-right: auto;
 }
