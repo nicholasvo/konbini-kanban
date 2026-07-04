@@ -77,11 +77,58 @@ function mountPopover(anchor: HTMLElement, build: (body: HTMLElement, close: () 
 	return { close };
 }
 
-function searchHeader(body: HTMLElement, placeholder: string): HTMLInputElement {
+function searchHeader(body: HTMLElement, placeholder: string, autofocus = true): HTMLInputElement {
 	const head = body.createDiv("bk-popover-search");
 	const input = head.createEl("input", { type: "text", placeholder });
-	window.setTimeout(() => input.focus(), 10);
+	// On touch, autofocusing opens the keyboard, which covers the list — skip it.
+	if (autofocus) window.setTimeout(() => input.focus(), 10);
 	return input;
+}
+
+/**
+ * Open the OS-native single-select picker over an anchor. Used on the narrow /
+ * mobile layout, where the custom popover would be obscured by the on-screen
+ * keyboard the search field summons.
+ */
+function openNativeSelect(
+	anchor: HTMLElement,
+	items: { value: string; label: string }[],
+	current: string,
+	onPick: (value: string) => void | Promise<void>
+): void {
+	// Mount inside the modal container when invoked from a modal, so the modal's
+	// focus trap doesn't immediately steal focus back from the select.
+	const host = anchor.closest<HTMLElement>(".modal-container") ?? anchor.ownerDocument.body;
+	const sel = host.createEl("select", { cls: "bk-native-select" });
+	for (const it of items) {
+		const opt = sel.createEl("option", { value: it.value, text: it.label });
+		if (it.value === current) opt.selected = true;
+	}
+	const r = anchor.getBoundingClientRect();
+	sel.style.left = `${r.left}px`;
+	sel.style.top = `${r.top}px`;
+	sel.style.width = `${Math.max(r.width, 1)}px`;
+	sel.style.height = `${Math.max(r.height, 1)}px`;
+
+	let done = false;
+	const cleanup = () => {
+		if (done) return;
+		done = true;
+		sel.remove();
+	};
+	sel.addEventListener("change", () => {
+		void onPick(sel.value);
+		cleanup();
+	});
+	sel.addEventListener("blur", () => window.setTimeout(cleanup, 0));
+
+	sel.focus();
+	const withPicker = sel as HTMLSelectElement & { showPicker?: () => void };
+	try {
+		withPicker.showPicker?.();
+	} catch {
+		sel.click();
+	}
 }
 
 export function statusPopover(
@@ -90,6 +137,15 @@ export function statusPopover(
 	current: string,
 	onPick: (key: string) => void | Promise<void>
 ): void {
+	if (board.isNarrow()) {
+		openNativeSelect(
+			anchor,
+			board.cfg.statuses.map((s) => ({ value: s.key, label: (s.emoji ? `${s.emoji} ` : "") + s.label })),
+			current,
+			onPick
+		);
+		return;
+	}
 	mountPopover(anchor, (body, close) => {
 		const input = searchHeader(body, "Change status to...");
 		const list = body.createDiv("bk-popover-list");
@@ -125,6 +181,15 @@ export function priorityPopover(
 	current: string,
 	onPick: (key: string) => void | Promise<void>
 ): void {
+	if (board.isNarrow()) {
+		openNativeSelect(
+			anchor,
+			board.cfg.priorities.map((p) => ({ value: p.key, label: (p.emoji ? `${p.emoji} ` : "") + p.label })),
+			current,
+			onPick
+		);
+		return;
+	}
 	mountPopover(anchor, (body, close) => {
 		const input = searchHeader(body, "Set priority to...");
 		const list = body.createDiv("bk-popover-list");
@@ -160,7 +225,9 @@ export function labelPopover(
 ): void {
 	mountPopover(anchor, (body, close) => {
 		const chosen = new Set(selected);
-		const input = searchHeader(body, "Add label...");
+		// Multi-select stays a popover (no good native equivalent), but on touch
+		// we skip autofocus so the keyboard doesn't hide the checklist.
+		const input = searchHeader(body, "Add label...", !board.isNarrow());
 		const list = body.createDiv("bk-popover-list");
 		const commit = () => void onCommit(Array.from(chosen));
 
@@ -220,6 +287,15 @@ export function templatePopover(
 	current: string | null,
 	onPick: (name: string) => void | Promise<void>
 ): void {
+	if (board.isNarrow() && board.plugin.data.templates.length > 0) {
+		openNativeSelect(
+			anchor,
+			board.plugin.data.templates.map((t) => ({ value: t.name, label: t.name })),
+			current ?? "",
+			onPick
+		);
+		return;
+	}
 	mountPopover(anchor, (body, close) => {
 		const templates = board.plugin.data.templates;
 		if (templates.length === 0) {
