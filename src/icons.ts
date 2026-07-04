@@ -2,10 +2,7 @@ import { StatusIconKind, PriorityIconKind, StatusDef, PriorityDef } from "./cons
 
 /** An emoji glyph wrapped to sit where a 16px icon would. */
 function emojiSpan(emoji: string): HTMLSpanElement {
-	const span = activeDocument.createElement("span");
-	span.className = "bk-emoji";
-	span.textContent = emoji;
-	return span;
+	return createSpan({ cls: "bk-emoji", text: emoji });
 }
 
 /** Status glyph: the chosen emoji if set, otherwise the drawn Linear icon. */
@@ -28,20 +25,14 @@ export function priorityGlyph(def: PriorityDef): Node {
  */
 
 function svg(width = 16, height = 16): SVGSVGElement {
-	const el = activeDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
-	el.setAttribute("viewBox", "0 0 16 16");
-	el.setAttribute("width", String(width));
-	el.setAttribute("height", String(height));
-	el.setAttribute("fill", "none");
-	el.addClass("bk-icon");
-	return el;
+	return createSvg("svg", {
+		cls: "bk-icon",
+		attr: { viewBox: "0 0 16 16", width: String(width), height: String(height), fill: "none" },
+	});
 }
 
 function child(parent: SVGElement, tag: string, attrs: Record<string, string>): SVGElement {
-	const el = activeDocument.createElementNS("http://www.w3.org/2000/svg", tag);
-	for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-	parent.appendChild(el);
-	return el;
+	return parent.createSvg(tag as keyof SVGElementTagNameMap, { attr: attrs });
 }
 
 export function statusIcon(kind: StatusIconKind, color: string): SVGSVGElement {

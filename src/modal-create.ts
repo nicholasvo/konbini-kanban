@@ -1,5 +1,6 @@
 import { Modal, TFile, setIcon, Notice } from "obsidian";
 import type { KanbanBoard } from "./view";
+import { ConfirmModal } from "./modal-confirm";
 import { createTask, PendingAttachment } from "./data";
 import { statusGlyph, priorityGlyph } from "./icons";
 import { statusPopover, priorityPopover, labelPopover, datePopover, templatePopover } from "./pickers";
@@ -61,7 +62,9 @@ export class CreateTaskModal extends Modal {
 		this.animatingClose = true;
 		this.modalEl.addClass("bk-dialog-closing");
 		this.containerEl.querySelector(".modal-bg")?.addClass("bk-overlay-closing");
-		window.setTimeout(() => super.close(), 150);
+		// Skip the exit-animation wait entirely for reduced-motion users.
+		const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+		window.setTimeout(() => super.close(), reduce ? 0 : 150);
 	}
 
 	onOpen(): void {
@@ -210,11 +213,22 @@ export class CreateTaskModal extends Modal {
 		if (!tpl) return;
 		const hasText = this.descInput.value.trim().length > 0;
 		if (hasText && this.descInput.value !== tpl.body) {
-			const ok = window.confirm("Replace the current description with this template?");
-			if (!ok) return;
+			new ConfirmModal(
+				this.app,
+				"Replace the current description with this template?",
+				(ok) => {
+					if (ok) this.setTemplate(tpl.body, name);
+				},
+				"Replace"
+			).open();
+			return;
 		}
-		this.description = tpl.body;
-		this.descInput.value = tpl.body;
+		this.setTemplate(tpl.body, name);
+	}
+
+	private setTemplate(body: string, name: string): void {
+		this.description = body;
+		this.descInput.value = body;
 		this.template = name;
 		this.refreshPills();
 		this.descInput.focus();
@@ -323,8 +337,10 @@ export class CreateTaskModal extends Modal {
 			this.renderAttachments();
 			this.reopenForNext();
 		} else {
+			// Stay on the board rather than opening the new note; repaint and let
+			// the freshly created card animate in.
 			this.close();
-			this.board.openFile(file, new MouseEvent("click"));
+			this.board.animateInCard(file.path);
 		}
 	}
 

@@ -8,3 +8,6 @@ data.json
 
 # OS
 .DS_Store
+
+# Hot reload marker
+.hotreload
