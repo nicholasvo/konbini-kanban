@@ -552,20 +552,31 @@ body.bk-dragging {
 	overflow: hidden;
 }
 
-.bk-popover-search input {
-	width: 100%;
-	border: none;
-	background: transparent;
-	padding: 5px 7px 8px;
-	font-size: var(--font-ui-small);
-	border-bottom: 1px solid var(--background-modifier-border);
+/* Divider lives on the container; the input itself is clean (no border/shadow,
+   which the mobile theme would otherwise apply). */
+.bk-popover-search {
 	margin-bottom: 5px;
-	color: var(--text-normal);
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.bk-popover-search input:focus {
+.bk-popover-search input {
+	width: 100%;
+	padding: 4px 6px;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	background: transparent;
+	border: none !important;
+	border-radius: 0;
+	box-shadow: none !important;
+}
+
+.bk-popover-search input:focus,
+.bk-popover-search input:focus-visible,
+.bk-popover-search input:active {
 	outline: none;
-	box-shadow: none;
+	border: none !important;
+	box-shadow: none !important;
 }
 
 .bk-popover-list {
@@ -743,8 +754,8 @@ body.bk-dragging {
 	font-weight: 700;
 	line-height: 1.15;
 	letter-spacing: -0.01em;
-	/* Flush-left; the modal content padding provides the inset. */
-	padding: 0;
+	/* 2px keeps the glyph's left bearing off the text-box edge (else it clips). */
+	padding: 0 2px;
 	margin: 0;
 	color: var(--text-normal);
 }
@@ -777,8 +788,10 @@ body.bk-dragging {
 	max-width: 62ch;
 	font-size: 1rem;
 	line-height: 1.45;
-	/* Flush-left, matching the title, with breathing room below it. */
-	padding: 0;
+	/* Match the title's 2px inset and kill any theme rounding so the first
+	   character isn't clipped by the text box edge/corner on mobile. */
+	padding: 0 2px;
+	border-radius: 0;
 	margin: 12px 0 0;
 	color: var(--text-normal);
 	font-family: inherit;
@@ -1405,6 +1418,43 @@ body.bk-dragging {
 /* Columns grow to fit their cards; the .bk-columns container owns the scroll. */
 .bk-root.bk-narrow .bk-column-body {
 	overflow-y: visible;
+}
+
+/* Hidden-columns panel spans the full width, like the stacked columns above it. */
+.bk-root.bk-narrow .bk-hidden-panel {
+	flex: 0 0 auto;
+	width: 100%;
+	align-self: stretch;
+}
+
+/* The invisible native <select> we open over a picker anchor on touch. */
+.bk-native-select {
+	position: fixed;
+	z-index: var(--layer-menu);
+	margin: 0;
+	padding: 0;
+	border: none;
+	opacity: 0;
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+/* Lift task modals off the bottom on mobile so the on-screen keyboard, which
+   opens for the title/description, doesn't cover the fields. */
+.is-mobile .modal.bk-create-modal {
+	align-self: flex-start;
+	/* Clear the status bar / dynamic island up top. */
+	margin-top: calc(24px + env(safe-area-inset-top, 0px));
+}
+
+/* Clear Obsidian's bottom mobile toolbar so the last card isn't hidden behind
+   it, and the FAB floats above it. */
+.is-mobile .bk-root.bk-narrow .bk-columns {
+	padding-bottom: calc(12px + var(--mobile-navbar-height, 48px) + env(safe-area-inset-bottom, 0px));
+}
+
+.is-mobile .bk-fab {
+	bottom: calc(16px + var(--mobile-navbar-height, 48px) + env(safe-area-inset-bottom, 0px));
 }
 
 /* Roomier tap targets for the in-card controls on touch layouts. */
