@@ -1,4 +1,4 @@
-import { setIcon } from "obsidian";
+import { setIcon, Platform } from "obsidian";
 import { STATUS_COLOR_PALETTE } from "./constants";
 import { statusGlyph, priorityGlyph } from "./icons";
 import type { KanbanBoard } from "./view";
@@ -85,50 +85,56 @@ function searchHeader(body: HTMLElement, placeholder: string, autofocus = true):
 	return input;
 }
 
+interface DrawerItem {
+	value: string;
+	label: string;
+	glyph?: () => Node;
+}
+
 /**
- * Open the OS-native single-select picker over an anchor. Used on the narrow /
- * mobile layout, where the custom popover would be obscured by the on-screen
- * keyboard the search field summons.
+ * A bottom sheet that slides up for choosing a single option on touch. Replaces
+ * both the floating popover (which the keyboard obscured) and the native
+ * <select> (unreliable in the mobile webview). No text input, so no keyboard —
+ * and unlike a native select it can render the real status/priority glyphs.
  */
-function openNativeSelect(
-	anchor: HTMLElement,
-	items: { value: string; label: string }[],
+function openOptionDrawer(
+	items: DrawerItem[],
 	current: string,
 	onPick: (value: string) => void | Promise<void>
 ): void {
-	// Mount inside the modal container when invoked from a modal, so the modal's
-	// focus trap doesn't immediately steal focus back from the select.
-	const host = anchor.closest<HTMLElement>(".modal-container") ?? anchor.ownerDocument.body;
-	const sel = host.createEl("select", { cls: "bk-native-select" });
-	for (const it of items) {
-		const opt = sel.createEl("option", { value: it.value, text: it.label });
-		if (it.value === current) opt.selected = true;
-	}
-	const r = anchor.getBoundingClientRect();
-	sel.style.left = `${r.left}px`;
-	sel.style.top = `${r.top}px`;
-	sel.style.width = `${Math.max(r.width, 1)}px`;
-	sel.style.height = `${Math.max(r.height, 1)}px`;
+	const root = activeDocument.body.createDiv("bk-drawer-root");
+	const backdrop = root.createDiv("bk-drawer-backdrop");
+	const sheet = root.createDiv("bk-drawer");
+	sheet.createDiv("bk-drawer-handle");
+	const list = sheet.createDiv("bk-drawer-list");
 
-	let done = false;
-	const cleanup = () => {
-		if (done) return;
-		done = true;
-		sel.remove();
+	let closed = false;
+	const close = () => {
+		if (closed) return;
+		closed = true;
+		root.removeClass("is-open");
+		window.setTimeout(() => root.remove(), 240);
 	};
-	sel.addEventListener("change", () => {
-		void onPick(sel.value);
-		cleanup();
-	});
-	sel.addEventListener("blur", () => window.setTimeout(cleanup, 0));
 
-	sel.focus();
-	const withPicker = sel as HTMLSelectElement & { showPicker?: () => void };
-	try {
-		withPicker.showPicker?.();
-	} catch {
-		sel.click();
+	for (const it of items) {
+		const row = list.createDiv("bk-drawer-item");
+		if (it.glyph) row.appendChild(it.glyph());
+		row.createSpan({ cls: "bk-drawer-label", text: it.label });
+		if (it.value === current) {
+			row.addClass("is-selected");
+			setIcon(row.createSpan("bk-drawer-check"), "check");
+		}
+		row.onclick = () => {
+			void onPick(it.value);
+			close();
+		};
 	}
+
+	backdrop.onclick = close;
+	// Two frames so the browser paints the off-screen state before transitioning.
+	activeWindow.requestAnimationFrame(() =>
+		activeWindow.requestAnimationFrame(() => root.addClass("is-open"))
+	);
 }
 
 export function statusPopover(
@@ -137,10 +143,9 @@ export function statusPopover(
 	current: string,
 	onPick: (key: string) => void | Promise<void>
 ): void {
-	if (board.isNarrow()) {
-		openNativeSelect(
-			anchor,
-			board.cfg.statuses.map((s) => ({ value: s.key, label: (s.emoji ? `${s.emoji} ` : "") + s.label })),
+	if (Platform.isMobile) {
+		openOptionDrawer(
+			board.cfg.statuses.map((s) => ({ value: s.key, label: s.label, glyph: () => statusGlyph(s) })),
 			current,
 			onPick
 		);
@@ -181,10 +186,9 @@ export function priorityPopover(
 	current: string,
 	onPick: (key: string) => void | Promise<void>
 ): void {
-	if (board.isNarrow()) {
-		openNativeSelect(
-			anchor,
-			board.cfg.priorities.map((p) => ({ value: p.key, label: (p.emoji ? `${p.emoji} ` : "") + p.label })),
+	if (Platform.isMobile) {
+		openOptionDrawer(
+			board.cfg.priorities.map((p) => ({ value: p.key, label: p.label, glyph: () => priorityGlyph(p) })),
 			current,
 			onPick
 		);
@@ -225,9 +229,9 @@ export function labelPopover(
 ): void {
 	mountPopover(anchor, (body, close) => {
 		const chosen = new Set(selected);
-		// Multi-select stays a popover (no good native equivalent), but on touch
+		// Multi-select stays a popover (no good native equivalent), but on mobile
 		// we skip autofocus so the keyboard doesn't hide the checklist.
-		const input = searchHeader(body, "Add label...", !board.isNarrow());
+		const input = searchHeader(body, "Add label...", !Platform.isMobile);
 		const list = body.createDiv("bk-popover-list");
 		const commit = () => void onCommit(Array.from(chosen));
 
@@ -287,9 +291,8 @@ export function templatePopover(
 	current: string | null,
 	onPick: (name: string) => void | Promise<void>
 ): void {
-	if (board.isNarrow() && board.plugin.data.templates.length > 0) {
-		openNativeSelect(
-			anchor,
+	if (Platform.isMobile && board.plugin.data.templates.length > 0) {
+		openOptionDrawer(
 			board.plugin.data.templates.map((t) => ({ value: t.name, label: t.name })),
 			current ?? "",
 			onPick

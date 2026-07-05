@@ -1427,16 +1427,82 @@ body.bk-dragging {
 	align-self: stretch;
 }
 
-/* The invisible native <select> we open over a picker anchor on touch. */
-.bk-native-select {
+/* ---- Option drawer (bottom-sheet picker, touch) ---------- */
+
+.bk-drawer-root {
 	position: fixed;
+	inset: 0;
+	/* Above the modal layer, so a drawer opened from a modal sits over it. */
 	z-index: var(--layer-menu);
-	margin: 0;
-	padding: 0;
-	border: none;
+}
+
+.bk-drawer-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.4);
 	opacity: 0;
-	-webkit-appearance: none;
-	appearance: none;
+	transition: opacity 220ms ease;
+}
+.bk-drawer-root.is-open .bk-drawer-backdrop {
+	opacity: 1;
+}
+
+.bk-drawer {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: var(--background-primary);
+	border-radius: 16px 16px 0 0;
+	box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.28);
+	padding: 8px 8px calc(12px + env(safe-area-inset-bottom, 0px));
+	max-height: 72vh;
+	overflow-y: auto;
+	transform: translateY(100%);
+	transition: transform 280ms var(--motion-ease-enter);
+}
+.bk-drawer-root.is-open .bk-drawer {
+	transform: translateY(0);
+}
+
+.bk-drawer-handle {
+	width: 36px;
+	height: 4px;
+	margin: 6px auto 10px;
+	border-radius: 2px;
+	background: var(--background-modifier-border);
+}
+
+.bk-drawer-item {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 13px 12px;
+	border-radius: 10px;
+	cursor: pointer;
+	font-size: var(--font-ui-medium);
+	color: var(--text-normal);
+}
+.bk-drawer-item:active {
+	background: var(--background-modifier-hover);
+}
+.bk-drawer-label {
+	flex: 1;
+}
+.bk-drawer-check {
+	display: inline-flex;
+	color: var(--text-accent);
+}
+.bk-drawer-check svg {
+	width: 17px;
+	height: 17px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.bk-drawer,
+	.bk-drawer-backdrop {
+		transition: none;
+	}
 }
 
 /* Lift task modals off the bottom on mobile so the on-screen keyboard, which
@@ -1448,13 +1514,9 @@ body.bk-dragging {
 }
 
 /* Clear Obsidian's bottom mobile toolbar so the last card isn't hidden behind
-   it, and the FAB floats above it. */
+   it. The FAB keeps its original lower position (see .bk-fab). */
 .is-mobile .bk-root.bk-narrow .bk-columns {
 	padding-bottom: calc(12px + var(--mobile-navbar-height, 48px) + env(safe-area-inset-bottom, 0px));
-}
-
-.is-mobile .bk-fab {
-	bottom: calc(16px + var(--mobile-navbar-height, 48px) + env(safe-area-inset-bottom, 0px));
 }
 
 /* Roomier tap targets for the in-card controls on touch layouts. */
@@ -1532,48 +1594,6 @@ body.bk-dragging {
 }
 
 /* ---- Edit sheet (mobile-first task editor) ---------------- */
-
-/* Prominent full-width status control — the primary way to re-status a card
-   when drag is unavailable. Tinted with the live status color (set as
-   --bk-status-color in JS) so it signals its status, not just via the glyph. */
-.bk-edit-status {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin: 12px 0 0;
-	padding: 10px 12px;
-	border-radius: var(--bk-card-radius);
-	background: color-mix(in srgb, var(--bk-status-color, transparent) 12%, var(--background-secondary));
-	/* Box-shadow border stays crisp on the tinted fill (a solid border muddies). */
-	box-shadow: inset 0 0 0 1px var(--background-modifier-border);
-	font-size: var(--font-ui-medium);
-	font-weight: 600;
-	cursor: pointer;
-	transition:
-		background-color 100ms ease,
-		box-shadow 100ms ease,
-		transform 100ms var(--motion-ease-exit-snappy);
-}
-.bk-edit-status:hover {
-	background: color-mix(in srgb, var(--bk-status-color, transparent) 18%, var(--background-modifier-hover));
-	box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
-}
-.bk-edit-status:active {
-	transform: scale(0.99);
-}
-.bk-edit-status-label {
-	flex: 1;
-	font-weight: 600;
-}
-.bk-edit-status-chevron {
-	display: inline-flex;
-	color: var(--text-muted);
-}
-/* Lock the chevron's weight to the 16px status glyph on the other end. */
-.bk-edit-status-chevron svg {
-	width: 16px;
-	height: 16px;
-}
 
 /* "Open note" sits on the left; Save keeps its place on the right. */
 .bk-edit-modal .bk-create-footer .bk-edit-open {

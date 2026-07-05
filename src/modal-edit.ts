@@ -12,10 +12,9 @@ function fmtDate(iso: string): string {
 }
 
 /**
- * Touch-first edit sheet for an existing task. Mirrors the create modal, but
- * pre-filled from the task and it commits back to the note on Save. The status
- * control is promoted to a full-width button — on the narrow layout, where drag
- * is disabled, this is the primary way to move a card between columns.
+ * Touch-first edit sheet for an existing task. Mirrors the create modal — title,
+ * description, and a row of tag pills (status, priority, labels, dates) — but
+ * pre-filled from the task and committing back to the note on Save.
  */
 export class EditTaskModal extends Modal {
 	private board: KanbanBoard;
@@ -34,7 +33,7 @@ export class EditTaskModal extends Modal {
 	private descLoaded = false;
 	private descInput!: HTMLTextAreaElement;
 
-	private statusBtn!: HTMLElement;
+	private statusPill!: HTMLElement;
 	private priorityPill!: HTMLElement;
 	private labelPill!: HTMLElement;
 	private startPill!: HTMLElement;
@@ -103,23 +102,20 @@ export class EditTaskModal extends Modal {
 		this.descInput = descInput;
 		void this.loadBody();
 
-		// Prominent status control — the primary "change status" affordance when
-		// drag is unavailable.
-		this.statusBtn = contentEl.createDiv("bk-edit-status");
-		this.statusBtn.onclick = () =>
-			statusPopover(this.statusBtn, this.board, this.status, (key) => {
-				this.status = key;
-				this.refresh();
-			});
-
-		// Secondary pills.
+		// Pill row — status is just another tag, matching the create modal.
 		const pills = contentEl.createDiv("bk-create-pills");
+		this.statusPill = pills.createDiv("bk-pill");
 		this.priorityPill = pills.createDiv("bk-pill");
 		this.labelPill = pills.createDiv("bk-pill");
 		this.startPill = pills.createDiv("bk-pill");
 		this.endPill = pills.createDiv("bk-pill");
 		this.refresh();
 
+		this.statusPill.onclick = () =>
+			statusPopover(this.statusPill, this.board, this.status, (key) => {
+				this.status = key;
+				this.refresh();
+			});
 		this.priorityPill.onclick = () =>
 			priorityPopover(this.priorityPill, this.board, this.priority, (key) => {
 				this.priority = key;
@@ -173,14 +169,9 @@ export class EditTaskModal extends Modal {
 
 	private refresh(): void {
 		const s = this.board.statusByKey.get(this.status);
-		this.statusBtn.empty();
-		// Wash the control with its status color (CSS tints the fill from this).
-		if (s?.color) this.statusBtn.style.setProperty("--bk-status-color", s.color);
-		else this.statusBtn.style.removeProperty("--bk-status-color");
-		if (s) this.statusBtn.appendChild(statusGlyph(s));
-		this.statusBtn.createSpan({ cls: "bk-edit-status-label", text: s?.label ?? "Status" });
-		const chevron = this.statusBtn.createSpan("bk-edit-status-chevron");
-		setIcon(chevron, "chevron-down");
+		this.statusPill.empty();
+		if (s) this.statusPill.appendChild(statusGlyph(s));
+		this.statusPill.createSpan({ text: s?.label ?? "Status" });
 
 		const p = this.board.priorityByKey.get(this.priority);
 		this.priorityPill.empty();
