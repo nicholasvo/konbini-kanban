@@ -255,24 +255,33 @@ function templatePreview(body: string): string {
 
 /** Modal for creating or editing a description-body template. */
 class TemplateEditModal extends Modal {
+	private plugin: KonbiniKanbanPlugin;
 	private original: Template | null;
 	private existingNames: string[];
 	private onSubmit: (template: Template) => void | Promise<void>;
 	private name: string;
 	private body: string;
+	private tplStatus: string;
+	private tplPriority: string;
+	private tplLabels: string[];
 
 	constructor(
 		app: App,
+		plugin: KonbiniKanbanPlugin,
 		original: Template | null,
 		existingNames: string[],
 		onSubmit: (template: Template) => void | Promise<void>
 	) {
 		super(app);
+		this.plugin = plugin;
 		this.original = original;
 		this.existingNames = existingNames;
 		this.onSubmit = onSubmit;
 		this.name = original?.name ?? "";
 		this.body = original?.body ?? "";
+		this.tplStatus = original?.status ?? "";
+		this.tplPriority = original?.priority ?? "";
+		this.tplLabels = original?.labels ? [...original.labels] : [];
 	}
 
 	onOpen(): void {
@@ -295,6 +304,52 @@ class TemplateEditModal extends Modal {
 				area.inputEl.rows = 8;
 			});
 
+		new Setting(contentEl).setName("Prefill values").setHeading();
+
+		const allStatuses = [...DEFAULT_STATUSES, ...this.plugin.data.customStatuses];
+		new Setting(contentEl)
+			.setName("Status")
+			.setDesc("Pre-select a status when this template is applied.")
+			.addDropdown((dd) => {
+				dd.addOption("", "— none —");
+				for (const s of allStatuses) dd.addOption(s.key, s.label);
+				dd.setValue(this.tplStatus);
+				dd.onChange((v) => (this.tplStatus = v));
+			});
+
+		const allPriorities = [
+			...DEFAULT_PRIORITIES.filter((p) => p.key !== "no priority"),
+			...this.plugin.data.customPriorities,
+		];
+		new Setting(contentEl)
+			.setName("Priority")
+			.setDesc("Pre-select a priority when this template is applied.")
+			.addDropdown((dd) => {
+				dd.addOption("", "— none —");
+				for (const p of allPriorities) dd.addOption(p.key, p.label);
+				dd.setValue(this.tplPriority);
+				dd.onChange((v) => (this.tplPriority = v));
+			});
+
+		const knownLabels = this.plugin.data.customLabels.map((l) => l.name).join(", ");
+		new Setting(contentEl)
+			.setName("Labels")
+			.setDesc(
+				knownLabels
+					? `Comma-separated. Available: ${knownLabels}`
+					: "Comma-separated label names."
+			)
+			.addText((text) => {
+				text.setPlaceholder("bug, backend")
+					.setValue(this.tplLabels.join(", "));
+				text.onChange((v) => {
+					this.tplLabels = v
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean);
+				});
+			});
+
 		new Setting(contentEl).addButton((btn) =>
 			btn
 				.setButtonText(this.original ? "Save" : "Create")
@@ -314,7 +369,13 @@ class TemplateEditModal extends Modal {
 			new Notice("A template with that name already exists");
 			return;
 		}
-		await this.onSubmit({ name, body: this.body });
+		await this.onSubmit({
+			name,
+			body: this.body,
+			status: this.tplStatus || undefined,
+			priority: this.tplPriority || undefined,
+			labels: this.tplLabels.length > 0 ? [...this.tplLabels] : undefined,
+		});
 		this.close();
 	}
 
@@ -352,15 +413,16 @@ class KonbiniSettingTab extends PluginSettingTab {
 					.setButtonText("Add template")
 					.setCta()
 					.onClick(() =>
-						new TemplateEditModal(
-							this.app,
-							null,
-							this.plugin.data.templates.map((t) => t.name),
-							async (template) => {
-								await this.plugin.saveTemplate(template);
-								this.display();
-							}
-						).open()
+					new TemplateEditModal(
+						this.app,
+						this.plugin,
+						null,
+						this.plugin.data.templates.map((t) => t.name),
+						async (template) => {
+							await this.plugin.saveTemplate(template);
+							this.display();
+						}
+					).open()
 					)
 			);
 
@@ -380,15 +442,16 @@ class KonbiniSettingTab extends PluginSettingTab {
 						.setIcon("pencil")
 						.setTooltip("Edit")
 						.onClick(() =>
-							new TemplateEditModal(
-								this.app,
-								template,
-								this.plugin.data.templates.map((t) => t.name),
-								async (edited) => {
-									await this.plugin.saveTemplate(edited, template.name);
-									this.display();
-								}
-							).open()
+						new TemplateEditModal(
+							this.app,
+							this.plugin,
+							template,
+							this.plugin.data.templates.map((t) => t.name),
+							async (edited) => {
+								await this.plugin.saveTemplate(edited, template.name);
+								this.display();
+							}
+						).open()
 						)
 				)
 				.addExtraButton((b) =>

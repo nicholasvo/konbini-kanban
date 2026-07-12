@@ -46,6 +46,10 @@ export interface LabelDef {
 export interface Template {
 	name: string;
 	body: string;
+	/** Optional prefill values applied when the template is selected in the create modal. */
+	status?: string;
+	priority?: string;
+	labels?: string[];
 }
 
 /**

@@ -4,6 +4,7 @@ import { ConfirmModal } from "./modal-confirm";
 import { createTask, PendingAttachment } from "./data";
 import { statusGlyph, priorityGlyph } from "./icons";
 import { statusPopover, priorityPopover, labelPopover, datePopover, templatePopover } from "./pickers";
+import type { Template } from "./constants";
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
 
@@ -11,6 +12,7 @@ function fmtDate(iso: string): string {
 	const d = new Date(`${iso}T00:00:00`);
 	return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, DATE_FMT);
 }
+
 
 interface CreateOptions {
 	status: string;
@@ -207,28 +209,40 @@ export class CreateTaskModal extends Modal {
 		window.setTimeout(() => titleInput.focus(), 20);
 	}
 
-	/** Replace the description with a template's body (confirming any overwrite). */
+	/**
+	 * Apply a template by name, prompting the user to confirm if they've already
+	 * entered any values — description, status, priority, labels, or dates.
+	 */
 	private applyTemplate(name: string): void {
 		const tpl = this.board.plugin.data.templates.find((t) => t.name === name);
 		if (!tpl) return;
-		const hasText = this.descInput.value.trim().length > 0;
-		if (hasText && this.descInput.value !== tpl.body) {
+
+		const isDirty =
+			this.description.trim().length > 0 ||
+			this.status !== this.opts.status ||
+			this.priority !== "no priority" ||
+			this.labels.length > 0 ||
+			this.startDate !== null ||
+			this.endDate !== null;
+
+		if (isDirty) {
 			new ConfirmModal(
 				this.app,
-				"Replace the current description with this template?",
-				(ok) => {
-					if (ok) this.setTemplate(tpl.body, name);
-				},
-				"Replace"
+				`Apply template "${name}"? This will replace your current description, status, priority, labels, and dates.`,
+				(ok) => { if (ok) this.setTemplate(tpl, name); },
+				"Apply"
 			).open();
 			return;
 		}
-		this.setTemplate(tpl.body, name);
+		this.setTemplate(tpl, name);
 	}
 
-	private setTemplate(body: string, name: string): void {
-		this.description = body;
-		this.descInput.value = body;
+	private setTemplate(tpl: Template, name: string): void {
+		this.description = tpl.body;
+		this.descInput.value = tpl.body;
+		if (tpl.status) this.status = tpl.status;
+		if (tpl.priority) this.priority = tpl.priority;
+		if (tpl.labels?.length) this.labels = [...tpl.labels];
 		this.template = name;
 		this.refreshPills();
 		this.descInput.focus();
