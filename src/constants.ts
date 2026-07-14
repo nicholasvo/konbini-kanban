@@ -99,6 +99,11 @@ export const STATUS_COLOR_PALETTE = [
 	"#d4b106",
 ];
 
+/** Normalize a column/status name to the frontmatter key (lowercase trim). */
+export function buildColumnKey(name: string): string {
+	return name.trim().toLowerCase();
+}
+
 /** Default frontmatter property names. All are remappable via view options. */
 export const DEFAULTS = {
 	statusProp: "status",
