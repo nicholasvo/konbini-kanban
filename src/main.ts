@@ -147,6 +147,19 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		for (const board of this.boards) board.refresh();
 	}
 
+	/** Move a column up (delta -1) or down (delta +1) in the global list. */
+	async moveColumn(key: string, delta: -1 | 1): Promise<void> {
+		const i = this.data.columns.findIndex((c) => c.key === key);
+		const j = i + delta;
+		if (i < 0 || j < 0 || j >= this.data.columns.length) return;
+		const next = [...this.data.columns];
+		const [item] = next.splice(i, 1);
+		next.splice(j, 0, item);
+		this.data.columns = next;
+		await this.saveData(this.data);
+		for (const board of this.boards) board.refresh();
+	}
+
 	/** @deprecated Prefer addColumn — kept so older board helpers keep compiling. */
 	async addCustomStatus(def: StatusDef): Promise<void> {
 		await this.addColumn(def);
@@ -445,7 +458,7 @@ class KonbiniSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Columns")
 			.setDesc(
-				"These columns apply to all Kanban views that don't define their own column set in view options. Views with a custom Columns override are unaffected."
+				"These columns apply to all Kanban views that don't define their own column set in view options. Order here is left-to-right on the board. Views with a custom Columns override are unaffected."
 			)
 			.setHeading()
 			.addButton((btn) =>
@@ -473,21 +486,29 @@ class KonbiniSettingTab extends PluginSettingTab {
 				text: "No columns yet — add one to get started.",
 			});
 		}
-		for (const col of columns) {
-			new Setting(containerEl)
-				.setName(col.label)
-				.addToggle((toggle) =>
-					toggle.setValue(!hidden.has(col.key)).onChange((visible) => {
-						void this.plugin.setColumnHidden(col.key, !visible);
-					})
-				)
-				.addExtraButton((btn) =>
-					btn
-						.setIcon("trash-2")
-						.setTooltip("Delete")
-						.onClick(() => this.confirmDeleteColumn(col))
-				);
-		}
+		columns.forEach((col, index) => {
+			const row = new Setting(containerEl).setName(col.label).addToggle((toggle) =>
+				toggle.setValue(!hidden.has(col.key)).onChange((visible) => {
+					void this.plugin.setColumnHidden(col.key, !visible);
+				})
+			);
+			row.addExtraButton((btn) => {
+				btn.setIcon("chevron-up").setTooltip("Move up");
+				if (index === 0) btn.setDisabled(true);
+				else btn.onClick(() => void this.plugin.moveColumn(col.key, -1).then(() => this.display()));
+			});
+			row.addExtraButton((btn) => {
+				btn.setIcon("chevron-down").setTooltip("Move down");
+				if (index === columns.length - 1) btn.setDisabled(true);
+				else btn.onClick(() => void this.plugin.moveColumn(col.key, 1).then(() => this.display()));
+			});
+			row.addExtraButton((btn) =>
+				btn
+					.setIcon("trash-2")
+					.setTooltip("Delete")
+					.onClick(() => this.confirmDeleteColumn(col))
+			);
+		});
 
 		// Description-body templates, picked from the create modal's Template pill.
 		new Setting(containerEl)

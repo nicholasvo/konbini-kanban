@@ -7,7 +7,7 @@ A Linear-style kanban board rendered as a **custom [Obsidian Bases](https://help
 ## Features
 
 - **Status columns** — Backlog · Todo · In Progress · Done · Canceled (Linear glyphs). Drag a card between columns to rewrite its `status`, with a springy animation.
-- **Global columns (Settings)** — add, hide, or delete columns plugin-wide. New Kanban views inherit this set automatically.
+- **Global columns (Settings)** — add, hide, reorder (up/down), or delete columns plugin-wide. New Kanban views inherit this set and left-to-right order automatically.
 - **Per-view column override** — optionally redefine columns on a single Bases view without changing the global set.
 - **Priority** — No priority · Urgent · High · Medium · Low, with Linear's signal-bar icons.
 - **Labels** — multi-value, with on-the-fly creation; the picker suggests labels already used across the base.
@@ -27,7 +27,7 @@ Obsidian's `BasesView` API is **read-only**: it hands the view the filtered set 
 
 Column definitions live in **plugin Settings** and apply to every Kanban view that does not set its own override.
 
-1. **Global Settings** — manage the default column list (add / hide / delete).
+1. **Global Settings** — manage the default column list (add / hide / reorder / delete). Order in Settings is left-to-right on the board.
 2. **View option override** — if a view's "Columns override" field is non-empty (`key:Label, key:Label, …`), that string wins for that view only. Global Settings changes do not rewrite it.
 3. **Empty / absent override** — the view uses the global Settings columns.
 
