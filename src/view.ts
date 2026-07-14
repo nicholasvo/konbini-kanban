@@ -123,10 +123,10 @@ export class KanbanBoard {
 		const key = name.trim().toLowerCase();
 		if (key.length === 0) return this.cfg.defaultStatus;
 		if (this.statusByKey.has(key)) return key;
-		await this.plugin.addCustomStatus({
+		await this.plugin.addColumn({
 			key,
 			label: name.trim(),
-			color: color ?? this.paletteColor(this.plugin.data.customStatuses.length),
+			color: color ?? this.paletteColor(this.plugin.data.columns.length),
 			icon: "unstarted",
 			emoji: emoji || undefined,
 		});
@@ -171,7 +171,7 @@ export class KanbanBoard {
 	}
 
 	isCustomStatus(key: string): boolean {
-		return this.plugin.data.customStatuses.some((s) => s.key === key);
+		return this.plugin.data.columns.some((s) => s.key === key);
 	}
 	isCustomPriority(key: string): boolean {
 		return this.plugin.data.customPriorities.some((p) => p.key === key);
@@ -181,7 +181,7 @@ export class KanbanBoard {
 	}
 
 	async deleteStatus(key: string): Promise<void> {
-		await this.plugin.removeCustomStatus(key);
+		await this.plugin.removeColumn(key);
 		this.refresh();
 	}
 	async deletePriority(key: string): Promise<void> {
@@ -593,7 +593,7 @@ export class KanbanBasesView extends BasesView {
 		const cfg = resolveConfig(
 			{ get: (k: string) => this.config.get(k) },
 			{
-				statuses: this.plugin.data.customStatuses,
+				columns: this.plugin.data.columns,
 				priorities: this.plugin.data.customPriorities,
 				labels: this.plugin.data.customLabels,
 			}

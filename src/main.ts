@@ -20,12 +20,18 @@ import {
 	DEFAULT_LABELS,
 	DEFAULTS,
 	SEED_NOTE_PATH,
+	STATUS_COLOR_PALETTE,
+	buildColumnKey,
 } from "./constants";
-import { viewOptions } from "./config";
+import { viewOptions, mergeStatuses } from "./config";
 import { KanbanBasesView, KanbanBoard } from "./view";
+import { ConfirmModal } from "./modal-confirm";
 
-/** Persisted plugin data: user-created statuses/priorities/labels and prefs. */
+/** Persisted plugin data: columns, priorities/labels, templates, and prefs. */
 interface KanbanData {
+	/** Global column list (ordered). Authoritative default when a view has no override. */
+	columns: StatusDef[];
+	/** @deprecated Migrated into `columns` on load; kept for one-release compat. */
 	customStatuses: StatusDef[];
 	customPriorities: PriorityDef[];
 	customLabels: LabelDef[];
@@ -38,6 +44,7 @@ interface KanbanData {
 
 export default class KonbiniKanbanPlugin extends Plugin {
 	data: KanbanData = {
+		columns: [],
 		customStatuses: [],
 		customPriorities: [],
 		customLabels: [],
@@ -53,6 +60,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	async onload(): Promise<void> {
 		const loaded = (await this.loadData()) as Partial<KanbanData> | null;
 		this.data = {
+			columns: loaded?.columns ?? [],
 			customStatuses: loaded?.customStatuses ?? [],
 			customPriorities: loaded?.customPriorities ?? [],
 			customLabels: loaded?.customLabels ?? [],
@@ -61,6 +69,14 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			pixelArt: loaded?.pixelArt ?? true,
 			initialized: loaded?.initialized ?? false,
 		};
+
+		// Migrate: seed global columns from defaults + any legacy customStatuses.
+		if (!this.data.columns.length) {
+			this.data.columns = mergeStatuses(DEFAULT_STATUSES, this.data.customStatuses).map((s) => ({
+				...s,
+			}));
+			await this.saveData(this.data);
+		}
 
 		// Seed the general default labels once (existing label names are kept).
 		if (!this.data.initialized) {
@@ -101,10 +117,39 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		}
 	}
 
-	async addCustomStatus(def: StatusDef): Promise<void> {
-		if (this.data.customStatuses.some((s) => s.key === def.key)) return;
-		this.data.customStatuses.push(def);
+	/** Append a global column. No-op if the key already exists. */
+	async addColumn(def: StatusDef): Promise<void> {
+		if (this.data.columns.some((s) => s.key === def.key)) return;
+		this.data.columns.push(def);
 		await this.persist();
+		for (const board of this.boards) board.refresh();
+	}
+
+	/** Remove a global column and clear it from the hidden list. */
+	async removeColumn(key: string): Promise<void> {
+		if (this.data.columns.length <= 1) {
+			new Notice("Konbini Kanban: keep at least one column.");
+			return;
+		}
+		this.data.columns = this.data.columns.filter((s) => s.key !== key);
+		this.data.hiddenStatuses = this.data.hiddenStatuses.filter((k) => k !== key);
+		await this.persist();
+		for (const board of this.boards) board.refresh();
+	}
+
+	/** Show or hide a status column across all open boards. */
+	async setColumnHidden(key: string, hidden: boolean): Promise<void> {
+		const set = new Set(this.data.hiddenStatuses);
+		if (hidden) set.add(key);
+		else set.delete(key);
+		this.data.hiddenStatuses = Array.from(set);
+		await this.saveData(this.data);
+		for (const board of this.boards) board.refresh();
+	}
+
+	/** @deprecated Prefer addColumn — kept so older board helpers keep compiling. */
+	async addCustomStatus(def: StatusDef): Promise<void> {
+		await this.addColumn(def);
 	}
 
 	async addCustomPriority(def: PriorityDef): Promise<void> {
@@ -124,9 +169,9 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		await this.persist();
 	}
 
+	/** @deprecated Prefer removeColumn. */
 	async removeCustomStatus(key: string): Promise<void> {
-		this.data.customStatuses = this.data.customStatuses.filter((s) => s.key !== key);
-		await this.persist();
+		await this.removeColumn(key);
 	}
 
 	async removeCustomPriority(key: string): Promise<void> {
@@ -163,7 +208,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	// Updates only change emoji/color (not the stored value), so they skip the
 	// seed-note rewrite but still save and repaint open boards.
 	async updateCustomStatus(key: string, emoji: string, color: string): Promise<void> {
-		const def = this.data.customStatuses.find((s) => s.key === key);
+		const def = this.data.columns.find((s) => s.key === key);
 		if (!def) return;
 		def.emoji = emoji || undefined;
 		def.color = color;
@@ -189,14 +234,9 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		for (const board of this.boards) board.refresh();
 	}
 
-	/** Show or hide a status column across all open boards. */
+	/** @deprecated Prefer setColumnHidden. */
 	async setStatusHidden(key: string, hidden: boolean): Promise<void> {
-		const set = new Set(this.data.hiddenStatuses);
-		if (hidden) set.add(key);
-		else set.delete(key);
-		this.data.hiddenStatuses = Array.from(set);
-		await this.saveData(this.data);
-		for (const board of this.boards) board.refresh();
+		await this.setColumnHidden(key, hidden);
 	}
 
 	async setPixelArt(on: boolean): Promise<void> {
@@ -218,10 +258,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	 * property typeahead even before any task uses them.
 	 */
 	private async updateSeedNote(): Promise<void> {
-		const statuses = [
-			...DEFAULT_STATUSES.map((s) => s.key),
-			...this.data.customStatuses.map((s) => s.key),
-		];
+		const statuses = this.data.columns.map((s) => s.key);
 		const priorities = [
 			...DEFAULT_PRIORITIES.filter((p) => p.key !== "no priority").map((p) => p.key),
 			...this.data.customPriorities.map((p) => p.key),
@@ -251,6 +288,68 @@ function templatePreview(body: string): string {
 	const flat = body.replace(/\s+/g, " ").trim();
 	if (flat.length === 0) return "Empty template";
 	return flat.length > 80 ? `${flat.slice(0, 80)}…` : flat;
+}
+
+/** Modal for creating a global column (name only; icon/color auto-assigned). */
+class ColumnEditModal extends Modal {
+	private existingKeys: string[];
+	private onSubmit: (def: StatusDef) => void | Promise<void>;
+	private name = "";
+	private paletteIndex: number;
+
+	constructor(
+		app: App,
+		existingKeys: string[],
+		paletteIndex: number,
+		onSubmit: (def: StatusDef) => void | Promise<void>
+	) {
+		super(app);
+		this.existingKeys = existingKeys;
+		this.paletteIndex = paletteIndex;
+		this.onSubmit = onSubmit;
+	}
+
+	onOpen(): void {
+		const { contentEl, titleEl } = this;
+		titleEl.setText("New column");
+
+		new Setting(contentEl).setName("Name").addText((text) => {
+			text.setPlaceholder("Review").setValue(this.name);
+			text.onChange((v) => (this.name = v));
+			window.setTimeout(() => text.inputEl.focus(), 20);
+		});
+
+		new Setting(contentEl).addButton((btn) =>
+			btn
+				.setButtonText("Create")
+				.setCta()
+				.onClick(() => void this.submit())
+		);
+	}
+
+	private async submit(): Promise<void> {
+		const label = this.name.trim();
+		if (label.length === 0) {
+			new Notice("Column needs a name");
+			return;
+		}
+		const key = buildColumnKey(label);
+		if (this.existingKeys.includes(key)) {
+			new Notice("A column with that name already exists");
+			return;
+		}
+		await this.onSubmit({
+			key,
+			label,
+			color: STATUS_COLOR_PALETTE[this.paletteIndex % STATUS_COLOR_PALETTE.length],
+			icon: "unstarted",
+		});
+		this.close();
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
 }
 
 /** Modal for creating or editing a description-body template. */
@@ -342,6 +441,54 @@ class KonbiniSettingTab extends PluginSettingTab {
 				toggle.setValue(this.plugin.data.pixelArt).onChange((value) => void this.plugin.setPixelArt(value))
 			);
 
+		// Global columns — default for views without a per-board statuses override.
+		new Setting(containerEl)
+			.setName("Columns")
+			.setDesc(
+				"These columns apply to all Kanban views that don't define their own column set in view options. Views with a custom Columns override are unaffected."
+			)
+			.setHeading()
+			.addButton((btn) =>
+				btn
+					.setButtonText("Add column")
+					.setCta()
+					.onClick(() =>
+						new ColumnEditModal(
+							this.app,
+							this.plugin.data.columns.map((c) => c.key),
+							this.plugin.data.columns.length,
+							async (def) => {
+								await this.plugin.addColumn(def);
+								this.display();
+							}
+						).open()
+					)
+			);
+
+		const columns = this.plugin.data.columns;
+		const hidden = new Set(this.plugin.data.hiddenStatuses);
+		if (columns.length === 0) {
+			containerEl.createDiv({
+				cls: "setting-item-description",
+				text: "No columns yet — add one to get started.",
+			});
+		}
+		for (const col of columns) {
+			new Setting(containerEl)
+				.setName(col.label)
+				.addToggle((toggle) =>
+					toggle.setValue(!hidden.has(col.key)).onChange((visible) => {
+						void this.plugin.setColumnHidden(col.key, !visible);
+					})
+				)
+				.addExtraButton((btn) =>
+					btn
+						.setIcon("trash-2")
+						.setTooltip("Delete")
+						.onClick(() => this.confirmDeleteColumn(col))
+				);
+		}
+
 		// Description-body templates, picked from the create modal's Template pill.
 		new Setting(containerEl)
 			.setName("Task templates")
@@ -402,7 +549,6 @@ class KonbiniSettingTab extends PluginSettingTab {
 				);
 		}
 
-		// Only labels are user-definable; statuses and priorities are fixed.
 		new Setting(containerEl).setName("Custom labels").setHeading();
 		const labels = this.plugin.data.customLabels;
 		if (labels.length === 0) {
@@ -430,5 +576,33 @@ class KonbiniSettingTab extends PluginSettingTab {
 						})
 				);
 		}
+	}
+
+	private confirmDeleteColumn(col: StatusDef): void {
+		const count = this.countTasksWithStatus(col.key);
+		const msg =
+			count > 0
+				? `${count} task${count === 1 ? "" : "s"} use status “${col.label}”. They will fall back to the default status column on the board. Delete this column?`
+				: `Delete column “${col.label}”?`;
+		new ConfirmModal(
+			this.app,
+			msg,
+			(ok) => {
+				if (!ok) return;
+				void this.plugin.removeColumn(col.key).then(() => this.display());
+			},
+			"Delete"
+		).open();
+	}
+
+	/** Count notes whose default status property matches the column key. */
+	private countTasksWithStatus(key: string): number {
+		let n = 0;
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+			const raw = fm?.[DEFAULTS.statusProp];
+			if (typeof raw === "string" && raw.trim().toLowerCase() === key) n++;
+		}
+		return n;
 	}
 }
