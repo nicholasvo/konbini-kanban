@@ -72,9 +72,11 @@ export default class KonbiniKanbanPlugin extends Plugin {
 
 		// Migrate: seed global columns from defaults + any legacy customStatuses.
 		if (!this.data.columns.length) {
-			this.data.columns = mergeStatuses(DEFAULT_STATUSES, this.data.customStatuses).map((s) => ({
-				...s,
-			}));
+			this.data.columns = mergeStatuses(DEFAULT_STATUSES, this.data.customStatuses).map(
+				(s) => ({
+					...s,
+				})
+			);
 			await this.saveData(this.data);
 		}
 
@@ -106,7 +108,8 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		const ok = register(KANBAN_VIEW_TYPE, {
 			name: "Kanban",
 			icon: "square-kanban",
-			factory: (controller, containerEl) => new KanbanBasesView(controller, containerEl, this),
+			factory: (controller, containerEl) =>
+				new KanbanBasesView(controller, containerEl, this),
 			// viewOptions widens each entry's `type` to `string`; the values are
 			// valid text options, so re-assert the registration's option type.
 			options: viewOptions as unknown as BasesViewRegistration["options"],
@@ -402,7 +405,9 @@ class TemplateEditModal extends Modal {
 			.setDesc("Text inserted into the new task's body.")
 			.setClass("bk-template-body-setting")
 			.addTextArea((area) => {
-				area.setPlaceholder("## Steps to reproduce\n\n## Expected\n\n## Actual").setValue(this.body);
+				area.setPlaceholder("## Steps to reproduce\n\n## Expected\n\n## Actual").setValue(
+					this.body
+				);
 				area.onChange((v) => (this.body = v));
 				area.inputEl.rows = 8;
 			});
@@ -451,7 +456,9 @@ class KonbiniSettingTab extends PluginSettingTab {
 			.setName("Konbini empty-column art")
 			.setDesc("Show a cute animated ASCII konbini cat in columns that have no tasks.")
 			.addToggle((toggle) =>
-				toggle.setValue(this.plugin.data.pixelArt).onChange((value) => void this.plugin.setPixelArt(value))
+				toggle
+					.setValue(this.plugin.data.pixelArt)
+					.onChange((value) => void this.plugin.setPixelArt(value))
 			);
 
 		// Global columns — default for views without a per-board statuses override.
@@ -495,12 +502,18 @@ class KonbiniSettingTab extends PluginSettingTab {
 			row.addExtraButton((btn) => {
 				btn.setIcon("chevron-up").setTooltip("Move up");
 				if (index === 0) btn.setDisabled(true);
-				else btn.onClick(() => void this.plugin.moveColumn(col.key, -1).then(() => this.display()));
+				else
+					btn.onClick(
+						() => void this.plugin.moveColumn(col.key, -1).then(() => this.display())
+					);
 			});
 			row.addExtraButton((btn) => {
 				btn.setIcon("chevron-down").setTooltip("Move down");
 				if (index === columns.length - 1) btn.setDisabled(true);
-				else btn.onClick(() => void this.plugin.moveColumn(col.key, 1).then(() => this.display()));
+				else
+					btn.onClick(
+						() => void this.plugin.moveColumn(col.key, 1).then(() => this.display())
+					);
 			});
 			row.addExtraButton((btn) =>
 				btn
@@ -513,7 +526,9 @@ class KonbiniSettingTab extends PluginSettingTab {
 		// Description-body templates, picked from the create modal's Template pill.
 		new Setting(containerEl)
 			.setName("Task templates")
-			.setDesc("Reusable description text you can drop into a new task from the Template pill.")
+			.setDesc(
+				"Reusable description text you can drop into a new task from the Template pill."
+			)
 			.setHeading()
 			.addButton((btn) =>
 				btn
@@ -585,7 +600,9 @@ class KonbiniSettingTab extends PluginSettingTab {
 				.addColorPicker((picker) =>
 					picker
 						.setValue(label.color ?? "#888888")
-						.onChange((value) => void this.plugin.updateCustomLabel(label.name, "", value))
+						.onChange(
+							(value) => void this.plugin.updateCustomLabel(label.name, "", value)
+						)
 				)
 				.addExtraButton((btn) =>
 					btn

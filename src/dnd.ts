@@ -28,7 +28,11 @@ export function startCardDrag(
 
 	const onMove = (e: PointerEvent) => {
 		if (!started) {
-			if (Math.abs(e.clientX - startX) < DRAG_THRESHOLD && Math.abs(e.clientY - startY) < DRAG_THRESHOLD) return;
+			if (
+				Math.abs(e.clientX - startX) < DRAG_THRESHOLD &&
+				Math.abs(e.clientY - startY) < DRAG_THRESHOLD
+			)
+				return;
 			started = true;
 			begin();
 		}
@@ -44,10 +48,14 @@ export function startCardDrag(
 		activeDocument.removeEventListener("pointerup", onUp);
 		if (!started) return;
 		// Swallow the click that follows the drag so the note doesn't open.
-		activeDocument.addEventListener("click", (ev) => {
-			ev.stopPropagation();
-			ev.preventDefault();
-		}, { capture: true, once: true });
+		activeDocument.addEventListener(
+			"click",
+			(ev) => {
+				ev.stopPropagation();
+				ev.preventDefault();
+			},
+			{ capture: true, once: true }
+		);
 		drop();
 	};
 
@@ -71,7 +79,9 @@ export function startCardDrag(
 	}
 
 	function siblings(body: HTMLElement): HTMLElement[] {
-		return Array.from(body.querySelectorAll<HTMLElement>(".bk-card")).filter((c) => c !== cardEl);
+		return Array.from(body.querySelectorAll<HTMLElement>(".bk-card")).filter(
+			(c) => c !== cardEl
+		);
 	}
 
 	function indexAt(body: HTMLElement, clientY: number): number {
@@ -110,7 +120,8 @@ export function startCardDrag(
 
 	function drop(): void {
 		board.highlightColumn(null);
-		const targetStatus = cardEl.closest<HTMLElement>(".bk-column")?.dataset.status ?? task.status;
+		const targetStatus =
+			cardEl.closest<HTMLElement>(".bk-column")?.dataset.status ?? task.status;
 
 		let settled = false;
 		const settle = () => {

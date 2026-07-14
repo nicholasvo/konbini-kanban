@@ -14,12 +14,7 @@ export interface StatusDef {
 	emoji?: string;
 }
 
-export type StatusIconKind =
-	| "backlog"
-	| "unstarted"
-	| "started"
-	| "done"
-	| "canceled";
+export type StatusIconKind = "backlog" | "unstarted" | "started" | "done" | "canceled";
 
 export interface PriorityDef {
 	key: string;

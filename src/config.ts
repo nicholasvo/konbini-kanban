@@ -117,14 +117,54 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 /** Options array passed to registerBasesView. */
 export function viewOptions() {
 	return [
-		{ type: "text", displayName: "Status property", key: "statusProp", default: DEFAULTS.statusProp },
-		{ type: "text", displayName: "Priority property", key: "priorityProp", default: DEFAULTS.priorityProp },
-		{ type: "text", displayName: "Labels property", key: "labelsProp", default: DEFAULTS.labelsProp },
-		{ type: "text", displayName: "Parent property", key: "parentProp", default: DEFAULTS.parentProp },
-		{ type: "text", displayName: "Title property", key: "titleProp", default: DEFAULTS.titleProp },
-		{ type: "text", displayName: "Start date property", key: "startDateProp", default: DEFAULTS.startDateProp },
-		{ type: "text", displayName: "End date property", key: "endDateProp", default: DEFAULTS.endDateProp },
-		{ type: "text", displayName: "Default status (new tasks)", key: "defaultStatus", default: DEFAULTS.defaultStatus },
+		{
+			type: "text",
+			displayName: "Status property",
+			key: "statusProp",
+			default: DEFAULTS.statusProp,
+		},
+		{
+			type: "text",
+			displayName: "Priority property",
+			key: "priorityProp",
+			default: DEFAULTS.priorityProp,
+		},
+		{
+			type: "text",
+			displayName: "Labels property",
+			key: "labelsProp",
+			default: DEFAULTS.labelsProp,
+		},
+		{
+			type: "text",
+			displayName: "Parent property",
+			key: "parentProp",
+			default: DEFAULTS.parentProp,
+		},
+		{
+			type: "text",
+			displayName: "Title property",
+			key: "titleProp",
+			default: DEFAULTS.titleProp,
+		},
+		{
+			type: "text",
+			displayName: "Start date property",
+			key: "startDateProp",
+			default: DEFAULTS.startDateProp,
+		},
+		{
+			type: "text",
+			displayName: "End date property",
+			key: "endDateProp",
+			default: DEFAULTS.endDateProp,
+		},
+		{
+			type: "text",
+			displayName: "Default status (new tasks)",
+			key: "defaultStatus",
+			default: DEFAULTS.defaultStatus,
+		},
 		{
 			type: "text",
 			displayName: "Columns override (optional — overrides global Settings when set)",

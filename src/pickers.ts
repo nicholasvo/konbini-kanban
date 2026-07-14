@@ -13,7 +13,10 @@ interface PopoverHandle {
 	close(): void;
 }
 
-function mountPopover(anchor: HTMLElement, build: (body: HTMLElement, close: () => void) => void): PopoverHandle {
+function mountPopover(
+	anchor: HTMLElement,
+	build: (body: HTMLElement, close: () => void) => void
+): PopoverHandle {
 	const rect = anchor.getBoundingClientRect();
 	// Mount inside the modal container when invoked from a modal, so the modal's
 	// focus trap doesn't fight the popover's search input — that focus war is the
@@ -145,7 +148,11 @@ export function statusPopover(
 ): void {
 	if (Platform.isMobile) {
 		openOptionDrawer(
-			board.cfg.statuses.map((s) => ({ value: s.key, label: s.label, glyph: () => statusGlyph(s) })),
+			board.cfg.statuses.map((s) => ({
+				value: s.key,
+				label: s.label,
+				glyph: () => statusGlyph(s),
+			})),
 			current,
 			onPick
 		);
@@ -180,7 +187,11 @@ export function priorityPopover(
 ): void {
 	if (Platform.isMobile) {
 		openOptionDrawer(
-			board.cfg.priorities.map((p) => ({ value: p.key, label: p.label, glyph: () => priorityGlyph(p) })),
+			board.cfg.priorities.map((p) => ({
+				value: p.key,
+				label: p.label,
+				glyph: () => priorityGlyph(p),
+			})),
 			current,
 			onPick
 		);
@@ -243,7 +254,13 @@ export function labelPopover(
 				row.createSpan({ cls: "bk-popover-label", text: label });
 				if (board.isCustomLabel(label)) {
 					addEditBtn(row, () =>
-						colorForm(body, label, close, (color) => board.updateLabel(label, "", color), def?.color ?? STATUS_COLOR_PALETTE[0])
+						colorForm(
+							body,
+							label,
+							close,
+							(color) => board.updateLabel(label, "", color),
+							def?.color ?? STATUS_COLOR_PALETTE[0]
+						)
 					);
 					addDeleteBtn(row, async () => {
 						await board.deleteLabel(label);
@@ -260,7 +277,12 @@ export function labelPopover(
 				};
 			}
 			const q2 = input.value.trim();
-			if (q2 && !uniqueSorted([...board.knownLabels, ...chosen]).some((l) => l.toLowerCase() === q2.toLowerCase())) {
+			if (
+				q2 &&
+				!uniqueSorted([...board.knownLabels, ...chosen]).some(
+					(l) => l.toLowerCase() === q2.toLowerCase()
+				)
+			) {
 				const row = list.createDiv("bk-popover-item bk-popover-create");
 				setIcon(row.createSpan("bk-check"), "plus");
 				row.createSpan({ cls: "bk-popover-label", text: `Create “${q2}”` });
@@ -350,12 +372,17 @@ function colorForm(
 		if (color === chosen) sw.addClass("is-selected");
 		sw.onclick = () => {
 			chosen = color;
-			swatches.querySelectorAll(".bk-swatch").forEach((e) => (e as HTMLElement).removeClass("is-selected"));
+			swatches
+				.querySelectorAll(".bk-swatch")
+				.forEach((e) => (e as HTMLElement).removeClass("is-selected"));
 			sw.addClass("is-selected");
 		};
 	}
 
-	const btn = form.createEl("button", { cls: "bk-defform-btn mod-cta", text: isEdit ? "Save" : "Create" });
+	const btn = form.createEl("button", {
+		cls: "bk-defform-btn mod-cta",
+		text: isEdit ? "Save" : "Create",
+	});
 	btn.onclick = () => {
 		void onConfirm(chosen);
 		close();

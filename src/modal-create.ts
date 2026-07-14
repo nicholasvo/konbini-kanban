@@ -3,7 +3,13 @@ import type { KanbanBoard } from "./view";
 import { ConfirmModal } from "./modal-confirm";
 import { createTask, PendingAttachment } from "./data";
 import { statusGlyph, priorityGlyph } from "./icons";
-import { statusPopover, priorityPopover, labelPopover, datePopover, templatePopover } from "./pickers";
+import {
+	statusPopover,
+	priorityPopover,
+	labelPopover,
+	datePopover,
+	templatePopover,
+} from "./pickers";
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
 
@@ -141,7 +147,9 @@ export class CreateTaskModal extends Modal {
 				this.refreshPills();
 			});
 		this.templatePill.onclick = () =>
-			templatePopover(this.templatePill, this.board, this.template, (name) => this.applyTemplate(name));
+			templatePopover(this.templatePill, this.board, this.template, (name) =>
+				this.applyTemplate(name)
+			);
 
 		// Attachments preview + hidden file input.
 		this.attachmentsEl = contentEl.createDiv("bk-create-attachments");
@@ -170,7 +178,10 @@ export class CreateTaskModal extends Modal {
 		};
 		more.createSpan({ text: "Create more" });
 
-		const submit = footer.createEl("button", { cls: "bk-create-submit mod-cta", text: "Create task" });
+		const submit = footer.createEl("button", {
+			cls: "bk-create-submit mod-cta",
+			text: "Create task",
+		});
 		submit.onclick = () => void this.submit();
 
 		// Cmd/Ctrl+Enter submits from anywhere in the modal.
@@ -187,7 +198,8 @@ export class CreateTaskModal extends Modal {
 			}
 		});
 		this.modalEl.addEventListener("dragleave", (e) => {
-			if (!this.modalEl.contains(e.relatedTarget as Node)) this.modalEl.removeClass("bk-drag-over");
+			if (!this.modalEl.contains(e.relatedTarget as Node))
+				this.modalEl.removeClass("bk-drag-over");
 		});
 		this.modalEl.addEventListener("drop", (e) => {
 			this.modalEl.removeClass("bk-drag-over");
@@ -293,12 +305,16 @@ export class CreateTaskModal extends Modal {
 
 		this.startPill.empty();
 		setIcon(this.startPill.createSpan("bk-pill-icon"), "calendar");
-		this.startPill.createSpan({ text: this.startDate ? `Start ${fmtDate(this.startDate)}` : "Start date" });
+		this.startPill.createSpan({
+			text: this.startDate ? `Start ${fmtDate(this.startDate)}` : "Start date",
+		});
 		this.startPill.toggleClass("is-set", !!this.startDate);
 
 		this.endPill.empty();
 		setIcon(this.endPill.createSpan("bk-pill-icon"), "calendar-check");
-		this.endPill.createSpan({ text: this.endDate ? `Due ${fmtDate(this.endDate)}` : "End date" });
+		this.endPill.createSpan({
+			text: this.endDate ? `Due ${fmtDate(this.endDate)}` : "End date",
+		});
 		this.endPill.toggleClass("is-set", !!this.endDate);
 
 		this.templatePill.empty();
