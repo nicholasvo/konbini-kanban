@@ -11,3 +11,6 @@ data.json
 
 # Hot reload marker
 .hotreload
+
+# Cursor (local AI rules — not shared via remote)
+.cursor/

@@ -161,14 +161,6 @@ export function statusPopover(
 				row.appendChild(statusGlyph(s));
 				row.createSpan({ cls: "bk-popover-label", text: s.label });
 				if (s.key === current) markSelected(row);
-				// Existing custom statuses can still be removed, but new ones
-				// can't be created and the built-in set isn't editable.
-				if (board.isCustomStatus(s.key)) {
-					addDeleteBtn(row, async () => {
-						await board.deleteStatus(s.key);
-						render(input.value.toLowerCase());
-					});
-				}
 				row.onclick = () => {
 					void onPick(s.key);
 					close();
