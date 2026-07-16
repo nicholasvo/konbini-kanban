@@ -1,4 +1,4 @@
-import { normalizePath, type TFile } from "obsidian";
+import { normalizePath, parseYaml, type TFile } from "obsidian";
 import {
 	DEFAULTS,
 	KONBINI_ROLE_PROP,
@@ -29,6 +29,25 @@ export function isUnderKonbiniFolder(konbiniFolder: string, path: string): boole
 	const p = normalizePath(path);
 	if (!root || root === ".") return false;
 	return p === root || p.startsWith(`${root}/`);
+}
+
+/**
+ * Parse a markdown file's YAML frontmatter block directly from its raw
+ * contents. Used instead of `metadataCache` so freshly written template notes
+ * reflect their prefill values immediately, before the cache catches up.
+ */
+export function parseFrontmatter(content: string): Record<string, unknown> | undefined {
+	if (!content.startsWith("---")) return undefined;
+	const end = content.indexOf("\n---", 3);
+	if (end < 0) return undefined;
+	try {
+		const parsed = parseYaml(content.slice(3, end));
+		return parsed && typeof parsed === "object"
+			? (parsed as Record<string, unknown>)
+			: undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 /** Strip YAML frontmatter from a markdown file's raw contents. */
@@ -73,13 +92,16 @@ function asStringArray(v: unknown): string[] {
 	return [];
 }
 
-/** Build a Template from a vault file + raw contents + optional frontmatter. */
+/**
+ * Build a Template from a vault file + raw contents. Frontmatter is parsed from
+ * the contents by default; pass `frontmatter` to override (e.g. from a cache).
+ */
 export function parseTemplateFile(
 	file: TFile,
 	content: string,
-	frontmatter: Record<string, unknown> | undefined
+	frontmatter?: Record<string, unknown>
 ): Template {
-	const fm = frontmatter ?? {};
+	const fm = frontmatter ?? parseFrontmatter(content) ?? {};
 	const status = typeof fm[DEFAULTS.statusProp] === "string" ? String(fm[DEFAULTS.statusProp]).trim() : "";
 	const priority =
 		typeof fm[DEFAULTS.priorityProp] === "string" ? String(fm[DEFAULTS.priorityProp]).trim() : "";

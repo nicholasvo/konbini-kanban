@@ -650,8 +650,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			for (const child of folder.children) {
 				if (!(child instanceof TFile) || child.extension !== "md") continue;
 				const content = await this.app.vault.read(child);
-				const fm = this.app.metadataCache.getFileCache(child)?.frontmatter;
-				out.push(parseTemplateFile(child, content, fm));
+				out.push(parseTemplateFile(child, content));
 			}
 		}
 		out.sort((a, b) => a.name.localeCompare(b.name));
