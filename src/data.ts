@@ -1,5 +1,6 @@
 import { App, TFile, normalizePath, parseLinktext } from "obsidian";
 import { KanbanConfig } from "./config";
+import { DEFAULTS } from "./constants";
 
 /** Normalized in-memory view of one task note. */
 export interface Task {
@@ -165,6 +166,77 @@ export function collectLabels(tasks: Task[]): string[] {
 	const set = new Set<string>();
 	for (const i of tasks) for (const l of i.labels) set.add(l);
 	return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+export interface RewriteLabelsResult {
+	filesTouched: number;
+	filesFailed: number;
+}
+
+/** Count markdown notes whose `labels` frontmatter includes `label` (case-insensitive). */
+export function countNotesWithLabel(
+	app: App,
+	label: string,
+	shouldSkip?: (path: string) => boolean
+): number {
+	const needle = label.toLowerCase();
+	let n = 0;
+	for (const file of app.vault.getMarkdownFiles()) {
+		if (shouldSkip?.(file.path)) continue;
+		const fm = app.metadataCache.getFileCache(file)?.frontmatter;
+		if (!fm || !(DEFAULTS.labelsProp in fm)) continue;
+		if (asStringArray(fm[DEFAULTS.labelsProp]).some((l) => l.toLowerCase() === needle)) n++;
+	}
+	return n;
+}
+
+/**
+ * Rename (`to` string) or remove (`to` null) a label across vault notes.
+ * Matches case-insensitively; writes canonical `to` (or drops) and dedupes.
+ */
+export async function rewriteLabelsInVault(
+	app: App,
+	from: string,
+	to: string | null,
+	shouldSkip?: (path: string) => boolean
+): Promise<RewriteLabelsResult> {
+	const fromLower = from.toLowerCase();
+	let filesTouched = 0;
+	let filesFailed = 0;
+
+	for (const file of app.vault.getMarkdownFiles()) {
+		if (shouldSkip?.(file.path)) continue;
+		const fm = app.metadataCache.getFileCache(file)?.frontmatter;
+		if (!fm || !(DEFAULTS.labelsProp in fm)) continue;
+		const labels = asStringArray(fm[DEFAULTS.labelsProp]);
+		if (!labels.some((l) => l.toLowerCase() === fromLower)) continue;
+
+		try {
+			await app.fileManager.processFrontMatter(file, (front: Record<string, unknown>) => {
+				const current = asStringArray(front[DEFAULTS.labelsProp]);
+				const next: string[] = [];
+				const seen = new Set<string>();
+				for (const l of current) {
+					let value = l;
+					if (l.toLowerCase() === fromLower) {
+						if (to === null) continue;
+						value = to;
+					}
+					const key = value.toLowerCase();
+					if (seen.has(key)) continue;
+					seen.add(key);
+					next.push(value);
+				}
+				if (next.length === 0) delete front[DEFAULTS.labelsProp];
+				else front[DEFAULTS.labelsProp] = next;
+			});
+			filesTouched++;
+		} catch {
+			filesFailed++;
+		}
+	}
+
+	return { filesTouched, filesFailed };
 }
 
 export interface NewTaskSpec {

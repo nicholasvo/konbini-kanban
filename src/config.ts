@@ -102,7 +102,8 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 	return {
 		statusProp: str(reader, "statusProp", DEFAULTS.statusProp),
 		priorityProp: str(reader, "priorityProp", DEFAULTS.priorityProp),
-		labelsProp: str(reader, "labelsProp", DEFAULTS.labelsProp),
+		// Labels property is permanently locked to `labels` (no per-view remap).
+		labelsProp: DEFAULTS.labelsProp,
 		parentProp: str(reader, "parentProp", DEFAULTS.parentProp),
 		titleProp: str(reader, "titleProp", DEFAULTS.titleProp),
 		startDateProp: str(reader, "startDateProp", DEFAULTS.startDateProp),
@@ -128,12 +129,6 @@ export function viewOptions() {
 			displayName: "Priority property",
 			key: "priorityProp",
 			default: DEFAULTS.priorityProp,
-		},
-		{
-			type: "text",
-			displayName: "Labels property",
-			key: "labelsProp",
-			default: DEFAULTS.labelsProp,
 		},
 		{
 			type: "text",

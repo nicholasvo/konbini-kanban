@@ -47,3 +47,14 @@ export class ConfirmModal extends Modal {
 		if (!this.answered) this.onResult(false);
 	}
 }
+
+/** Promise wrapper around ConfirmModal for async call sites. */
+export function confirmAction(
+	app: App,
+	message: string,
+	confirmText = "Confirm"
+): Promise<boolean> {
+	return new Promise((resolve) => {
+		new ConfirmModal(app, message, resolve, confirmText).open();
+	});
+}

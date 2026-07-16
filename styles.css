@@ -694,6 +694,45 @@ body.bk-dragging {
 	font-family: var(--font-text);
 }
 
+.bk-template-labels-setting {
+	border-bottom: none;
+	padding-bottom: 4px;
+}
+
+.bk-template-label-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 200px;
+	overflow-y: auto;
+	margin: 0 0 12px;
+	padding: 4px 0 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.bk-template-label-row {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 6px 8px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+.bk-template-label-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.bk-template-label-name {
+	font-size: var(--font-ui-small);
+}
+
+.bk-template-label-empty {
+	padding: 6px 8px 12px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+
 .bk-date-input {
 	width: 100%;
 	border: 1px solid var(--background-modifier-border);

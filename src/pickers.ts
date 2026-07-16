@@ -277,19 +277,21 @@ export function labelPopover(
 				};
 			}
 			const q2 = input.value.trim();
-			if (
-				q2 &&
-				!uniqueSorted([...board.knownLabels, ...chosen]).some(
+			const hasCI =
+				q2.length > 0 &&
+				(uniqueSorted([...board.knownLabels, ...chosen]).some(
 					(l) => l.toLowerCase() === q2.toLowerCase()
-				)
-			) {
+				) ||
+					!!board.plugin.findLabelDefCI(q2));
+			if (q2 && !hasCI) {
 				const row = list.createDiv("bk-popover-item bk-popover-create");
 				setIcon(row.createSpan("bk-check"), "plus");
 				row.createSpan({ cls: "bk-popover-label", text: `Create “${q2}”` });
 				row.onclick = () =>
 					colorForm(body, q2, close, async (color) => {
-						await board.addLabel(q2, "", color);
-						chosen.add(q2);
+						const created = await board.addLabel(q2, "", color);
+						if (!created) return;
+						chosen.add(created);
 						commit();
 					});
 			}
@@ -305,16 +307,16 @@ export function templatePopover(
 	current: string | null,
 	onPick: (name: string) => void | Promise<void>
 ): void {
-	if (Platform.isMobile && board.plugin.data.templates.length > 0) {
+	if (Platform.isMobile && board.plugin.listTemplates().length > 0) {
 		openOptionDrawer(
-			board.plugin.data.templates.map((t) => ({ value: t.name, label: t.name })),
+			board.plugin.listTemplates().map((t) => ({ value: t.name, label: t.name })),
 			current ?? "",
 			onPick
 		);
 		return;
 	}
 	mountPopover(anchor, (body, close) => {
-		const templates = board.plugin.data.templates;
+		const templates = board.plugin.listTemplates();
 		if (templates.length === 0) {
 			const empty = body.createDiv("bk-popover-empty");
 			empty.setText("No templates — add them in settings.");

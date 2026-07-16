@@ -1,7 +1,22 @@
 export const KANBAN_VIEW_TYPE = "kanban";
 
-/** Plugin-maintained note that seeds Obsidian's property typeahead. */
-export const SEED_NOTE_PATH = "Konbini Kanban values.md";
+/** Default vault folder for Values seed note + Templates. Overridable via settings. */
+export const DEFAULT_KONBINI_FOLDER = "Konbini";
+
+/** Legacy seed note path (pre-folder layout); migrated into `{konbiniFolder}/Values.md`. */
+export const LEGACY_SEED_NOTE_PATH = "Konbini Kanban values.md";
+
+/** Basename of the legacy seed note (matches even if the user moved it into a subfolder). */
+export const LEGACY_SEED_NOTE_BASENAME = "Konbini Kanban values";
+
+/** Frontmatter key marking Konbini-owned notes (values seed / templates). */
+export const KONBINI_ROLE_PROP = "konbini-role";
+
+export const KONBINI_ROLE_VALUES = "values";
+export const KONBINI_ROLE_TEMPLATE = "template";
+
+export const VALUES_NOTE_NAME = "Values.md";
+export const TEMPLATES_SUBFOLDER = "Templates";
 
 export interface StatusDef {
 	key: string;
@@ -37,10 +52,16 @@ export interface LabelDef {
 	emoji?: string;
 }
 
-/** A named description-body template (user-defined), applied on task create. */
+/** A named template (vault note under `{konbiniFolder}/Templates/`), applied on task create. */
 export interface Template {
 	name: string;
 	body: string;
+	/** Optional prefill values applied when the template is selected in the create modal. */
+	status?: string;
+	priority?: string;
+	labels?: string[];
+	/** Vault path of the template note when loaded from disk. */
+	path?: string;
 }
 
 /**

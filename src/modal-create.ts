@@ -3,6 +3,7 @@ import type { KanbanBoard } from "./view";
 import { ConfirmModal } from "./modal-confirm";
 import { createTask, PendingAttachment } from "./data";
 import { statusGlyph, priorityGlyph } from "./icons";
+import type { Template } from "./constants";
 import {
 	statusPopover,
 	priorityPopover,
@@ -17,6 +18,7 @@ function fmtDate(iso: string): string {
 	const d = new Date(`${iso}T00:00:00`);
 	return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, DATE_FMT);
 }
+
 
 interface CreateOptions {
 	status: string;
@@ -107,6 +109,7 @@ export class CreateTaskModal extends Modal {
 		// for <textarea>, which is why it wasn't showing.
 		const descInput = contentEl.createEl("textarea", { cls: "bk-create-desc" });
 		descInput.setAttr("placeholder", "Add description…");
+		descInput.value = this.description;
 		descInput.oninput = () => (this.description = descInput.value);
 		this.descInput = descInput;
 
@@ -219,31 +222,74 @@ export class CreateTaskModal extends Modal {
 		window.setTimeout(() => titleInput.focus(), 20);
 	}
 
-	/** Replace the description with a template's body (confirming any overwrite). */
+	/**
+	 * Apply a named template into modal state (safe before or after onOpen).
+	 * Used by the Template pill and by `obsidian://konbini` deep links.
+	 */
+	applyTemplateByName(name: string): void {
+		const tpl = this.board.plugin.getTemplate(name);
+		if (!tpl) {
+			new Notice(`Konbini Kanban: template "${name}" not found.`);
+			return;
+		}
+		if (this.descInput) {
+			this.applyTemplate(name);
+			return;
+		}
+		this.description = tpl.body;
+		if (tpl.status) this.status = tpl.status;
+		if (tpl.priority) this.priority = tpl.priority;
+		if (tpl.labels?.length) this.labels = [...tpl.labels];
+		this.template = name;
+	}
+
+	setStatusPrefill(status: string): void {
+		this.status = status;
+	}
+
+	setPriorityPrefill(priority: string): void {
+		this.priority = priority;
+	}
+
+	/**
+	 * Apply a template by name, prompting the user to confirm if they've already
+	 * entered any values — description, status, priority, labels, or dates.
+	 */
 	private applyTemplate(name: string): void {
-		const tpl = this.board.plugin.data.templates.find((t) => t.name === name);
+		const tpl = this.board.plugin.getTemplate(name);
 		if (!tpl) return;
-		const hasText = this.descInput.value.trim().length > 0;
-		if (hasText && this.descInput.value !== tpl.body) {
+
+		const isDirty =
+			this.description.trim().length > 0 ||
+			this.status !== this.opts.status ||
+			this.priority !== "no priority" ||
+			this.labels.length > 0 ||
+			this.startDate !== null ||
+			this.endDate !== null;
+
+		if (isDirty) {
 			new ConfirmModal(
 				this.app,
-				"Replace the current description with this template?",
+				`Apply template "${name}"? This will replace your current description, status, priority, and labels.`,
 				(ok) => {
-					if (ok) this.setTemplate(tpl.body, name);
+					if (ok) this.setTemplate(tpl, name);
 				},
-				"Replace"
+				"Apply"
 			).open();
 			return;
 		}
-		this.setTemplate(tpl.body, name);
+		this.setTemplate(tpl, name);
 	}
 
-	private setTemplate(body: string, name: string): void {
-		this.description = body;
-		this.descInput.value = body;
+	private setTemplate(tpl: Template, name: string): void {
+		this.description = tpl.body;
+		if (this.descInput) this.descInput.value = tpl.body;
+		if (tpl.status) this.status = tpl.status;
+		if (tpl.priority) this.priority = tpl.priority;
+		if (tpl.labels?.length) this.labels = [...tpl.labels];
 		this.template = name;
 		this.refreshPills();
-		this.descInput.focus();
+		this.descInput?.focus();
 	}
 
 	/** Read selected/dropped/pasted files into memory and show them. */
