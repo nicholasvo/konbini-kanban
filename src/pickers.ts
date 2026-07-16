@@ -305,16 +305,16 @@ export function templatePopover(
 	current: string | null,
 	onPick: (name: string) => void | Promise<void>
 ): void {
-	if (Platform.isMobile && board.plugin.data.templates.length > 0) {
+	if (Platform.isMobile && board.plugin.listTemplates().length > 0) {
 		openOptionDrawer(
-			board.plugin.data.templates.map((t) => ({ value: t.name, label: t.name })),
+			board.plugin.listTemplates().map((t) => ({ value: t.name, label: t.name })),
 			current ?? "",
 			onPick
 		);
 		return;
 	}
 	mountPopover(anchor, (body, close) => {
-		const templates = board.plugin.data.templates;
+		const templates = board.plugin.listTemplates();
 		if (templates.length === 0) {
 			const empty = body.createDiv("bk-popover-empty");
 			empty.setText("No templates — add them in settings.");

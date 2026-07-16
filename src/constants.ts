@@ -3,6 +3,15 @@ export const KANBAN_VIEW_TYPE = "kanban";
 /** Plugin-maintained note that seeds Obsidian's property typeahead. */
 export const SEED_NOTE_PATH = "Konbini Kanban values.md";
 
+/** Default vault folder for task templates. */
+export const DEFAULT_KONBINI_FOLDER = "Konbini";
+
+/** Frontmatter key marking Konbini-owned template notes. */
+export const KONBINI_ROLE_PROP = "konbini-role";
+export const KONBINI_ROLE_TEMPLATE = "template";
+
+export const TEMPLATES_SUBFOLDER = "Templates";
+
 export interface StatusDef {
 	key: string;
 	label: string;
@@ -37,7 +46,7 @@ export interface LabelDef {
 	emoji?: string;
 }
 
-/** A named description-body template (user-defined), applied on task create. */
+/** A named template (vault note under `{konbiniFolder}/Templates/`), applied on task create. */
 export interface Template {
 	name: string;
 	body: string;
@@ -45,6 +54,8 @@ export interface Template {
 	status?: string;
 	priority?: string;
 	labels?: string[];
+	/** Vault path of the template note when loaded from disk. */
+	path?: string;
 }
 
 /**

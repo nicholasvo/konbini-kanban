@@ -109,6 +109,7 @@ export class CreateTaskModal extends Modal {
 		// for <textarea>, which is why it wasn't showing.
 		const descInput = contentEl.createEl("textarea", { cls: "bk-create-desc" });
 		descInput.setAttr("placeholder", "Add description…");
+		descInput.value = this.description;
 		descInput.oninput = () => (this.description = descInput.value);
 		this.descInput = descInput;
 
@@ -221,12 +222,13 @@ export class CreateTaskModal extends Modal {
 		window.setTimeout(() => titleInput.focus(), 20);
 	}
 
+
 	/**
 	 * Apply a template by name, prompting the user to confirm if they've already
 	 * entered any values — description, status, priority, labels, or dates.
 	 */
 	private applyTemplate(name: string): void {
-		const tpl = this.board.plugin.data.templates.find((t) => t.name === name);
+		const tpl = this.board.plugin.getTemplate(name);
 		if (!tpl) return;
 
 		const isDirty =
@@ -240,8 +242,10 @@ export class CreateTaskModal extends Modal {
 		if (isDirty) {
 			new ConfirmModal(
 				this.app,
-				`Apply template "${name}"? This will replace your current description, status, priority, labels, and dates.`,
-				(ok) => { if (ok) this.setTemplate(tpl, name); },
+				`Apply template "${name}"? This will replace your current description, status, priority, and labels.`,
+				(ok) => {
+					if (ok) this.setTemplate(tpl, name);
+				},
 				"Apply"
 			).open();
 			return;
@@ -251,13 +255,13 @@ export class CreateTaskModal extends Modal {
 
 	private setTemplate(tpl: Template, name: string): void {
 		this.description = tpl.body;
-		this.descInput.value = tpl.body;
+		if (this.descInput) this.descInput.value = tpl.body;
 		if (tpl.status) this.status = tpl.status;
 		if (tpl.priority) this.priority = tpl.priority;
 		if (tpl.labels?.length) this.labels = [...tpl.labels];
 		this.template = name;
 		this.refreshPills();
-		this.descInput.focus();
+		this.descInput?.focus();
 	}
 
 	/** Read selected/dropped/pasted files into memory and show them. */

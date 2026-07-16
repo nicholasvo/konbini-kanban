@@ -6,7 +6,6 @@ import {
 	PriorityDef,
 	LabelDef,
 	STATUS_COLOR_PALETTE,
-	SEED_NOTE_PATH,
 } from "./constants";
 import { KanbanConfig, resolveConfig } from "./config";
 import type KonbiniKanbanPlugin from "./main";
@@ -614,8 +613,8 @@ export class KanbanBasesView extends BasesView {
 		const groups = data?.groupedData ?? [];
 		const pushEntry = (entry: BasesEntryLike): void => {
 			const file = entry?.file;
-			// Never show the plugin's typeahead seed note as a task.
-			if (file && file.path !== SEED_NOTE_PATH && !seen.has(file.path)) {
+			// Never show Konbini-managed notes (Values seed / templates) as tasks.
+			if (file && !this.plugin.isKonbiniManagedPath(file.path) && !seen.has(file.path)) {
 				seen.add(file.path);
 				out.push(file);
 			}

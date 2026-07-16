@@ -6,6 +6,7 @@ import {
 	App,
 	Modal,
 	TFile,
+	TFolder,
 	normalizePath,
 	type BasesViewRegistration,
 } from "obsidian";
@@ -19,6 +20,7 @@ import {
 	DEFAULT_PRIORITIES,
 	DEFAULT_LABELS,
 	DEFAULTS,
+	DEFAULT_KONBINI_FOLDER,
 	SEED_NOTE_PATH,
 	STATUS_COLOR_PALETTE,
 	buildColumnKey,
@@ -26,8 +28,15 @@ import {
 import { viewOptions, mergeStatuses } from "./config";
 import { KanbanBasesView, KanbanBoard } from "./view";
 import { ConfirmModal } from "./modal-confirm";
+import {
+	isUnderKonbiniFolder,
+	parseTemplateFile,
+	serializeTemplate,
+	templateNotePath,
+	templatesFolderPath,
+} from "./templates";
 
-/** Persisted plugin data: columns, priorities/labels, templates, and prefs. */
+/** Persisted plugin data: columns, priorities/labels, and prefs. */
 interface KanbanData {
 	/** Global column list (ordered). Authoritative default when a view has no override. */
 	columns: StatusDef[];
@@ -35,7 +44,13 @@ interface KanbanData {
 	customStatuses: StatusDef[];
 	customPriorities: PriorityDef[];
 	customLabels: LabelDef[];
+	/**
+	 * @deprecated Migrated to vault notes under `{konbiniFolder}/Templates/`.
+	 * Kept only so we can migrate on load.
+	 */
 	templates: Template[];
+	/** Vault-relative folder for Values.md + Templates/. */
+	konbiniFolder: string;
 	hiddenStatuses: string[];
 	pixelArt: boolean;
 	/** True once the default labels have been seeded (so we don't re-seed). */
@@ -49,6 +64,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		customPriorities: [],
 		customLabels: [],
 		templates: [],
+		konbiniFolder: DEFAULT_KONBINI_FOLDER,
 		hiddenStatuses: [],
 		pixelArt: true,
 		initialized: false,
@@ -56,6 +72,9 @@ export default class KonbiniKanbanPlugin extends Plugin {
 
 	/** Live boards, so settings changes can repaint them immediately. */
 	boards = new Set<KanbanBoard>();
+
+	/** In-memory templates loaded from `{konbiniFolder}/Templates/`. */
+	private templateCache: Template[] = [];
 
 	async onload(): Promise<void> {
 		const loaded = (await this.loadData()) as Partial<KanbanData> | null;
@@ -65,6 +84,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			customPriorities: loaded?.customPriorities ?? [],
 			customLabels: loaded?.customLabels ?? [],
 			templates: loaded?.templates ?? [],
+			konbiniFolder: loaded?.konbiniFolder?.trim() || DEFAULT_KONBINI_FOLDER,
 			hiddenStatuses: loaded?.hiddenStatuses ?? [],
 			pixelArt: loaded?.pixelArt ?? true,
 			initialized: loaded?.initialized ?? false,
@@ -91,9 +111,8 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			await this.saveData(this.data);
 		}
 
-		// Refresh the typeahead seed note once the vault is ready (covers the
-		// freshly-seeded default labels without creating a file during onload).
-		this.app.workspace.onLayoutReady(() => void this.updateSeedNote());
+		// Folder layout, seed note, and template migration once the vault is ready.
+		this.app.workspace.onLayoutReady(() => void this.onVaultReady());
 
 		this.addSettingTab(new KonbiniSettingTab(this.app, this));
 
@@ -119,6 +138,21 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			new Notice("Konbini Kanban: enable the core Bases plugin to use the Kanban view.");
 		}
 	}
+
+	/** True if a path is inside the configured Konbini folder (seed + templates). */
+	isKonbiniManagedPath(path: string): boolean {
+		if (normalizePath(path) === normalizePath(SEED_NOTE_PATH)) return true;
+		return isUnderKonbiniFolder(templatesFolderPath(this.data.konbiniFolder), path);
+	}
+
+	listTemplates(): Template[] {
+		return this.templateCache;
+	}
+
+	getTemplate(name: string): Template | undefined {
+		return this.templateCache.find((t) => t.name === name);
+	}
+
 
 	/** Append a global column. No-op if the key already exists. */
 	async addColumn(def: StatusDef): Promise<void> {
@@ -201,24 +235,44 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	}
 
 	/**
-	 * Add or overwrite a description-body template by name. Templates only feed
-	 * the create modal, so they skip the seed-note rewrite and board repaint.
+	 * Add or overwrite a template note under `{konbiniFolder}/Templates/`.
+	 * Templates only feed the create modal, so they skip the seed-note rewrite.
 	 */
 	async saveTemplate(template: Template, originalName?: string): Promise<void> {
-		const key = originalName ?? template.name;
-		const existing = this.data.templates.find((t) => t.name === key);
-		if (existing) {
-			existing.name = template.name;
-			existing.body = template.body;
+		await this.ensureFolder(templatesFolderPath(this.data.konbiniFolder));
+		const oldName = originalName ?? template.name;
+		const oldPath = templateNotePath(this.data.konbiniFolder, oldName);
+		const newPath = templateNotePath(this.data.konbiniFolder, template.name);
+		const content = serializeTemplate(template);
+
+		let file = this.app.vault.getAbstractFileByPath(oldPath);
+		if (file instanceof TFile) {
+			if (oldName !== template.name) {
+				const clash = this.app.vault.getAbstractFileByPath(newPath);
+				if (clash) {
+					new Notice("A template with that name already exists");
+					return;
+				}
+				await this.app.fileManager.renameFile(file, newPath);
+				file = this.app.vault.getAbstractFileByPath(newPath);
+			}
+			if (file instanceof TFile) await this.app.vault.modify(file, content);
 		} else {
-			this.data.templates.push(template);
+			const clash = this.app.vault.getAbstractFileByPath(newPath);
+			if (clash) {
+				new Notice("A template with that name already exists");
+				return;
+			}
+			await this.app.vault.create(newPath, content);
 		}
-		await this.saveData(this.data);
+		await this.refreshTemplates();
 	}
 
 	async removeTemplate(name: string): Promise<void> {
-		this.data.templates = this.data.templates.filter((t) => t.name !== name);
-		await this.saveData(this.data);
+		const path = templateNotePath(this.data.konbiniFolder, name);
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (file instanceof TFile) await this.app.vault.trash(file, true);
+		await this.refreshTemplates();
 	}
 
 	// Updates only change emoji/color (not the stored value), so they skip the
@@ -261,6 +315,57 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		for (const board of this.boards) board.refresh();
 	}
 
+	private async onVaultReady(): Promise<void> {
+		await this.ensureFolder(this.data.konbiniFolder);
+		await this.ensureFolder(templatesFolderPath(this.data.konbiniFolder));
+		await this.migrateDataTemplatesToNotes();
+		await this.updateSeedNote();
+		await this.refreshTemplates();
+	}
+
+	private async migrateDataTemplatesToNotes(): Promise<void> {
+		if (!this.data.templates.length) return;
+		await this.ensureFolder(templatesFolderPath(this.data.konbiniFolder));
+		for (const tpl of this.data.templates) {
+			const path = templateNotePath(this.data.konbiniFolder, tpl.name);
+			if (this.app.vault.getAbstractFileByPath(path)) continue;
+			await this.app.vault.create(path, serializeTemplate(tpl));
+		}
+		this.data.templates = [];
+		await this.saveData(this.data);
+	}
+
+	async refreshTemplates(): Promise<void> {
+		const folderPath = templatesFolderPath(this.data.konbiniFolder);
+		const folder = this.app.vault.getAbstractFileByPath(folderPath);
+		const out: Template[] = [];
+		if (folder instanceof TFolder) {
+			for (const child of folder.children) {
+				if (!(child instanceof TFile) || child.extension !== "md") continue;
+				const content = await this.app.vault.read(child);
+				const fm = this.app.metadataCache.getFileCache(child)?.frontmatter;
+				out.push(parseTemplateFile(child, content, fm));
+			}
+		}
+		out.sort((a, b) => a.name.localeCompare(b.name));
+		this.templateCache = out;
+	}
+
+	private async ensureFolder(path: string): Promise<void> {
+		const norm = normalizePath(path);
+		if (!norm || norm === "." || norm === "/") return;
+		if (this.app.vault.getAbstractFileByPath(norm)) return;
+		const parts = norm.split("/").filter(Boolean);
+		let cur = "";
+		for (const part of parts) {
+			cur = cur ? `${cur}/${part}` : part;
+			if (!this.app.vault.getAbstractFileByPath(cur)) {
+				await this.app.vault.createFolder(cur);
+			}
+		}
+	}
+
+
 	/** Save data and refresh the typeahead seed note. */
 	private async persist(): Promise<void> {
 		await this.saveData(this.data);
@@ -286,7 +391,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		if (!file) {
 			file = await this.app.vault.create(
 				path,
-				"Maintained by Konbini Kanban to seed property suggestions. Safe to keep or move.\n"
+				"Maintained by Konbini Kanban to seed property suggestions.\n"
 			);
 		}
 		if (file instanceof TFile) {
@@ -298,6 +403,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		}
 	}
 }
+
 
 /** One-line preview of a template body for the settings list. */
 function templatePreview(body: string): string {
@@ -423,7 +529,7 @@ class TemplateEditModal extends Modal {
 
 		new Setting(contentEl).setName("Prefill values").setHeading();
 
-		const allStatuses = [...DEFAULT_STATUSES, ...this.plugin.data.customStatuses];
+		const allStatuses = this.plugin.data.columns;
 		new Setting(contentEl)
 			.setName("Status")
 			.setDesc("Pre-select a status when this template is applied.")
@@ -522,6 +628,7 @@ class KonbiniSettingTab extends PluginSettingTab {
 					.onChange((value) => void this.plugin.setPixelArt(value))
 			);
 
+
 		// Global columns — default for views without a per-board statuses override.
 		new Setting(containerEl)
 			.setName("Columns")
@@ -588,7 +695,7 @@ class KonbiniSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Task templates")
 			.setDesc(
-				"Reusable description text you can drop into a new task from the Template pill."
+				`Reusable notes in ${this.plugin.data.konbiniFolder}/Templates — applied from the Template pill when creating a task.`
 			)
 			.setHeading()
 			.addButton((btn) =>
@@ -596,20 +703,20 @@ class KonbiniSettingTab extends PluginSettingTab {
 					.setButtonText("Add template")
 					.setCta()
 					.onClick(() =>
-					new TemplateEditModal(
-						this.app,
-						this.plugin,
-						null,
-						this.plugin.data.templates.map((t) => t.name),
-						async (template) => {
-							await this.plugin.saveTemplate(template);
-							this.display();
-						}
-					).open()
+						new TemplateEditModal(
+							this.app,
+							this.plugin,
+							null,
+							this.plugin.listTemplates().map((t) => t.name),
+							async (template) => {
+								await this.plugin.saveTemplate(template);
+								this.display();
+							}
+						).open()
 					)
 			);
 
-		const templates = this.plugin.data.templates;
+		const templates = this.plugin.listTemplates();
 		if (templates.length === 0) {
 			containerEl.createDiv({
 				cls: "setting-item-description",
@@ -625,16 +732,16 @@ class KonbiniSettingTab extends PluginSettingTab {
 						.setIcon("pencil")
 						.setTooltip("Edit")
 						.onClick(() =>
-						new TemplateEditModal(
-							this.app,
-							this.plugin,
-							template,
-							this.plugin.data.templates.map((t) => t.name),
-							async (edited) => {
-								await this.plugin.saveTemplate(edited, template.name);
-								this.display();
-							}
-						).open()
+							new TemplateEditModal(
+								this.app,
+								this.plugin,
+								template,
+								this.plugin.listTemplates().map((t) => t.name),
+								async (edited) => {
+									await this.plugin.saveTemplate(edited, template.name);
+									this.display();
+								}
+							).open()
 						)
 				)
 				.addExtraButton((b) =>
@@ -700,6 +807,7 @@ class KonbiniSettingTab extends PluginSettingTab {
 	private countTasksWithStatus(key: string): number {
 		let n = 0;
 		for (const file of this.app.vault.getMarkdownFiles()) {
+			if (this.plugin.isKonbiniManagedPath(file.path)) continue;
 			const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
 			const raw = fm?.[DEFAULTS.statusProp];
 			if (typeof raw === "string" && raw.trim().toLowerCase() === key) n++;
