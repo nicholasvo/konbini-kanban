@@ -33,8 +33,9 @@ import {
 } from "./constants";
 import { viewOptions, mergeStatuses } from "./config";
 import { KanbanBasesView, KanbanBoard } from "./view";
-import { ConfirmModal } from "./modal-confirm";
+import { ConfirmModal, confirmAction } from "./modal-confirm";
 import { CreateTaskModal } from "./modal-create";
+import { countNotesWithLabel, rewriteLabelsInVault } from "./data";
 import {
 	isUnderKonbiniFolder,
 	parseTemplateFile,
@@ -64,6 +65,8 @@ interface KanbanData {
 	pixelArt: boolean;
 	/** True once the default labels have been seeded (so we don't re-seed). */
 	initialized: boolean;
+	/** True once we've shown the one-time notice about locked `labels` property. */
+	labelsPropLockedNotified: boolean;
 }
 
 export default class KonbiniKanbanPlugin extends Plugin {
@@ -77,6 +80,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		hiddenStatuses: [],
 		pixelArt: true,
 		initialized: false,
+		labelsPropLockedNotified: false,
 	};
 
 	/** Live boards, so settings changes can repaint them immediately. */
@@ -99,6 +103,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			hiddenStatuses: loaded?.hiddenStatuses ?? [],
 			pixelArt: loaded?.pixelArt ?? true,
 			initialized: loaded?.initialized ?? false,
+			labelsPropLockedNotified: loaded?.labelsPropLockedNotified ?? false,
 		};
 
 		// Migrate: seed global columns from defaults + any legacy customStatuses.
@@ -114,7 +119,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		// Seed the general default labels once (existing label names are kept).
 		if (!this.data.initialized) {
 			for (const def of DEFAULT_LABELS) {
-				if (!this.data.customLabels.some((l) => l.name === def.name)) {
+				if (!this.findLabelDefCI(def.name)) {
 					this.data.customLabels.push({ ...def });
 				}
 			}
@@ -251,15 +256,28 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		await this.persist();
 	}
 
-	async addCustomLabel(def: LabelDef): Promise<void> {
-		const existing = this.data.customLabels.find((l) => l.name === def.name);
-		if (existing) {
-			existing.color = def.color;
-			existing.emoji = def.emoji;
-		} else {
-			this.data.customLabels.push(def);
+	async addCustomLabel(def: LabelDef): Promise<boolean> {
+		const name = def.name.trim();
+		if (name.length === 0) return false;
+		const clash = this.findLabelDefCI(name);
+		if (clash) {
+			new Notice(`A label named “${clash.name}” already exists`);
+			return false;
 		}
+		this.data.customLabels.push({
+			name,
+			color: def.color,
+			emoji: def.emoji,
+		});
 		await this.persist();
+		return true;
+	}
+
+	/** Case-insensitive lookup of a custom label definition. */
+	findLabelDefCI(name: string): LabelDef | undefined {
+		const needle = name.trim().toLowerCase();
+		if (!needle) return undefined;
+		return this.data.customLabels.find((l) => l.name.toLowerCase() === needle);
 	}
 
 	/** @deprecated Prefer removeColumn. */
@@ -272,9 +290,80 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		await this.persist();
 	}
 
+	/**
+	 * Remove a label def and strip it from all notes / templates (case-insensitive).
+	 * Caller should confirm first.
+	 */
 	async removeCustomLabel(name: string): Promise<void> {
-		this.data.customLabels = this.data.customLabels.filter((l) => l.name !== name);
+		const def = this.findLabelDefCI(name);
+		const canonical = def?.name ?? name.trim();
+		if (!canonical) return;
+
+		const result = await rewriteLabelsInVault(
+			this.app,
+			canonical,
+			null,
+			(path) => this.shouldSkipLabelSweep(path)
+		);
+		this.data.customLabels = this.data.customLabels.filter(
+			(l) => l.name.toLowerCase() !== canonical.toLowerCase()
+		);
 		await this.persist();
+		await this.refreshTemplates();
+		for (const board of this.boards) board.refresh();
+		if (result.filesFailed > 0) {
+			new Notice(
+				`Konbini Kanban: removed label “${canonical}” from ${result.filesTouched} note(s); ${result.filesFailed} failed.`
+			);
+		}
+	}
+
+	/**
+	 * Rename a label def and rewrite it on all notes / templates.
+	 * Caller should confirm first. Returns false if the new name clashes.
+	 */
+	async renameCustomLabel(oldName: string, newName: string): Promise<boolean> {
+		const def = this.findLabelDefCI(oldName);
+		if (!def) return false;
+		const next = newName.trim();
+		if (next.length === 0) {
+			new Notice("Label needs a name");
+			return false;
+		}
+		const clash = this.findLabelDefCI(next);
+		if (clash && clash.name !== def.name) {
+			new Notice(`A label named “${clash.name}” already exists`);
+			return false;
+		}
+		if (def.name === next) return true;
+
+		const result = await rewriteLabelsInVault(
+			this.app,
+			def.name,
+			next,
+			(path) => this.shouldSkipLabelSweep(path)
+		);
+		def.name = next;
+		await this.persist();
+		await this.refreshTemplates();
+		for (const board of this.boards) board.refresh();
+		if (result.filesFailed > 0) {
+			new Notice(
+				`Konbini Kanban: renamed label on ${result.filesTouched} note(s); ${result.filesFailed} failed.`
+			);
+		}
+		return true;
+	}
+
+	/** Skip Konbini-managed files except Templates/ (Values.md etc.). */
+	shouldSkipLabelSweep(path: string): boolean {
+		if (!isUnderKonbiniFolder(this.data.konbiniFolder, path)) return false;
+		return !isUnderKonbiniFolder(templatesFolderPath(this.data.konbiniFolder), path);
+	}
+
+	/** Count notes that reference a label (for confirm copy). */
+	countNotesWithLabel(name: string): number {
+		return countNotesWithLabel(this.app, name, (path) => this.shouldSkipLabelSweep(path));
 	}
 
 	/**
@@ -362,6 +451,34 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		await this.ensureKonbiniLayout();
 		await this.updateSeedNote();
 		await this.refreshTemplates();
+		await this.maybeNotifyLabelsPropLocked();
+	}
+
+	/** One-time notice if any .base still remaps labelsProp away from `labels`. */
+	private async maybeNotifyLabelsPropLocked(): Promise<void> {
+		if (this.data.labelsPropLockedNotified) return;
+		const remapped = await this.vaultHasRemappedLabelsProp();
+		this.data.labelsPropLockedNotified = true;
+		await this.saveData(this.data);
+		if (!remapped) return;
+		new Notice(
+			"Konbini Kanban now always uses the frontmatter property “labels”. A board in this vault had Labels property remapped — move those values into “labels” if cards look unlabeled.",
+			12000
+		);
+	}
+
+	private async vaultHasRemappedLabelsProp(): Promise<boolean> {
+		for (const file of this.app.vault.getFiles()) {
+			if (file.extension !== "base") continue;
+			const text = await this.app.vault.cachedRead(file);
+			const re = /labelsProp:\s*["']?([^\s"'\n]+)/g;
+			let m: RegExpExecArray | null;
+			while ((m = re.exec(text)) !== null) {
+				const v = m[1].replace(/^["']|["']$/g, "").trim();
+				if (v.length > 0 && v !== DEFAULTS.labelsProp) return true;
+			}
+		}
+		return false;
 	}
 
 	/** Create/migrate Konbini folder, Values seed, and Templates; repair moved folders. */
@@ -681,6 +798,64 @@ class ColumnEditModal extends Modal {
 			color: STATUS_COLOR_PALETTE[this.paletteIndex % STATUS_COLOR_PALETTE.length],
 			icon: "unstarted",
 		});
+		this.close();
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
+/** Modal for creating or renaming a custom label (name only; color auto-assigned on create). */
+class LabelEditModal extends Modal {
+	private plugin: KonbiniKanbanPlugin;
+	private original: LabelDef | null;
+	private onSubmit: (name: string) => void | Promise<void>;
+	private name: string;
+
+	constructor(
+		app: App,
+		plugin: KonbiniKanbanPlugin,
+		original: LabelDef | null,
+		onSubmit: (name: string) => void | Promise<void>
+	) {
+		super(app);
+		this.plugin = plugin;
+		this.original = original;
+		this.onSubmit = onSubmit;
+		this.name = original?.name ?? "";
+	}
+
+	onOpen(): void {
+		const { contentEl, titleEl } = this;
+		titleEl.setText(this.original ? "Rename label" : "New label");
+
+		new Setting(contentEl).setName("Name").addText((text) => {
+			text.setPlaceholder("important").setValue(this.name);
+			text.onChange((v) => (this.name = v));
+			window.setTimeout(() => text.inputEl.focus(), 20);
+		});
+
+		new Setting(contentEl).addButton((btn) =>
+			btn
+				.setButtonText(this.original ? "Save" : "Create")
+				.setCta()
+				.onClick(() => void this.submit())
+		);
+	}
+
+	private async submit(): Promise<void> {
+		const name = this.name.trim();
+		if (name.length === 0) {
+			new Notice("Label needs a name");
+			return;
+		}
+		const clash = this.plugin.findLabelDefCI(name);
+		if (clash && clash.name !== this.original?.name) {
+			new Notice(`A label named “${clash.name}” already exists`);
+			return;
+		}
+		await this.onSubmit(name);
 		this.close();
 	}
 
@@ -1014,12 +1189,32 @@ class KonbiniSettingTab extends PluginSettingTab {
 				);
 		}
 
-		new Setting(containerEl).setName("Custom labels").setHeading();
+		new Setting(containerEl)
+			.setName("Custom labels")
+			.setDesc("Labels you can apply to tasks. Rename or delete updates notes that use them.")
+			.setHeading()
+			.addButton((btn) =>
+				btn
+					.setButtonText("Add label")
+					.setCta()
+					.onClick(() =>
+						new LabelEditModal(this.app, this.plugin, null, async (name) => {
+							const ok = await this.plugin.addCustomLabel({
+								name,
+								color: STATUS_COLOR_PALETTE[
+									this.plugin.data.customLabels.length % STATUS_COLOR_PALETTE.length
+								],
+							});
+							if (ok) this.display();
+						}).open()
+					)
+			);
+
 		const labels = this.plugin.data.customLabels;
 		if (labels.length === 0) {
 			containerEl.createDiv({
 				cls: "setting-item-description",
-				text: "No custom labels yet — create them from a card's label picker.",
+				text: "No custom labels yet — add one here or from a card's label picker.",
 			});
 			return;
 		}
@@ -1035,14 +1230,53 @@ class KonbiniSettingTab extends PluginSettingTab {
 				)
 				.addExtraButton((btn) =>
 					btn
+						.setIcon("pencil")
+						.setTooltip("Rename")
+						.onClick(() =>
+							new LabelEditModal(this.app, this.plugin, label, async (name) => {
+								await this.confirmRenameLabel(label, name);
+							}).open()
+						)
+				)
+				.addExtraButton((btn) =>
+					btn
 						.setIcon("trash-2")
 						.setTooltip("Delete")
-						.onClick(async () => {
-							await this.plugin.removeCustomLabel(label.name);
-							this.display();
-						})
+						.onClick(() => void this.confirmDeleteLabel(label))
 				);
 		}
+	}
+
+	private async confirmRenameLabel(label: LabelDef, newName: string): Promise<void> {
+		if (newName === label.name) {
+			this.display();
+			return;
+		}
+		const n = this.plugin.countNotesWithLabel(label.name);
+		const ok = await confirmAction(
+			this.app,
+			n > 0
+				? `Rename label “${label.name}” to “${newName}” on ${n} note${n === 1 ? "" : "s"}?`
+				: `Rename label “${label.name}” to “${newName}”?`,
+			"Rename"
+		);
+		if (!ok) return;
+		const renamed = await this.plugin.renameCustomLabel(label.name, newName);
+		if (renamed) this.display();
+	}
+
+	private async confirmDeleteLabel(label: LabelDef): Promise<void> {
+		const n = this.plugin.countNotesWithLabel(label.name);
+		const ok = await confirmAction(
+			this.app,
+			n > 0
+				? `Remove label “${label.name}” from Settings and from ${n} note${n === 1 ? "" : "s"}?`
+				: `Delete label “${label.name}”?`,
+			"Delete"
+		);
+		if (!ok) return;
+		await this.plugin.removeCustomLabel(label.name);
+		this.display();
 	}
 
 	private confirmDeleteColumn(col: StatusDef): void {

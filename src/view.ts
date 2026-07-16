@@ -13,6 +13,7 @@ import { Task, readTask, setStatus, collectLabels } from "./data";
 import { renderCard } from "./card";
 import { CreateTaskModal } from "./modal-create";
 import { EditTaskModal } from "./modal-edit";
+import { confirmAction } from "./modal-confirm";
 import { renderEmptyKonbini } from "./konbini";
 import { statusGlyph } from "./icons";
 
@@ -147,15 +148,16 @@ export class KanbanBoard {
 		return key;
 	}
 
-	/** Persist a new (or updated) label definition. Returns the label name. */
+	/** Persist a new label definition. Returns the label name, or "" on failure. */
 	async addLabel(name: string, emoji?: string, color?: string): Promise<string> {
 		const n = name.trim();
 		if (n.length === 0) return "";
-		await this.plugin.addCustomLabel({
+		const ok = await this.plugin.addCustomLabel({
 			name: n,
 			color: color ?? this.paletteColor(this.plugin.data.customLabels.length),
 			emoji: emoji || undefined,
 		});
+		if (!ok) return "";
 		this.refresh();
 		return n;
 	}
@@ -183,6 +185,15 @@ export class KanbanBoard {
 		this.refresh();
 	}
 	async deleteLabel(name: string): Promise<void> {
+		const n = this.plugin.countNotesWithLabel(name);
+		const ok = await confirmAction(
+			this.app,
+			n > 0
+				? `Remove label “${name}” from Settings and from ${n} note${n === 1 ? "" : "s"}?`
+				: `Delete label “${name}”?`,
+			"Delete"
+		);
+		if (!ok) return;
 		await this.plugin.removeCustomLabel(name);
 		this.refresh();
 	}
