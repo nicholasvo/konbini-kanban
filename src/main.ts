@@ -8,6 +8,7 @@ import {
 	TFile,
 	TFolder,
 	normalizePath,
+	setIcon,
 	type BasesViewRegistration,
 } from "obsidian";
 import {
@@ -22,8 +23,11 @@ import {
 	DEFAULTS,
 	DEFAULT_KONBINI_FOLDER,
 	LEGACY_SEED_NOTE_PATH,
+	LEGACY_SEED_NOTE_BASENAME,
 	KONBINI_ROLE_PROP,
 	KONBINI_ROLE_VALUES,
+	VALUES_NOTE_NAME,
+	TEMPLATES_SUBFOLDER,
 	STATUS_COLOR_PALETTE,
 	buildColumnKey,
 } from "./constants";
@@ -35,6 +39,7 @@ import {
 	isUnderKonbiniFolder,
 	parseTemplateFile,
 	serializeTemplate,
+	stripFrontmatter,
 	templateNotePath,
 	templatesFolderPath,
 	valuesNotePath,
@@ -88,7 +93,9 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			customPriorities: loaded?.customPriorities ?? [],
 			customLabels: loaded?.customLabels ?? [],
 			templates: loaded?.templates ?? [],
-			konbiniFolder: loaded?.konbiniFolder?.trim() || DEFAULT_KONBINI_FOLDER,
+			konbiniFolder: this.normalizeKonbiniFolderPath(
+				loaded?.konbiniFolder?.trim() || DEFAULT_KONBINI_FOLDER
+			),
 			hiddenStatuses: loaded?.hiddenStatuses ?? [],
 			pixelArt: loaded?.pixelArt ?? true,
 			initialized: loaded?.initialized ?? false,
@@ -161,7 +168,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	}
 
 	async setKonbiniFolder(folder: string): Promise<void> {
-		const next = normalizePath(folder.trim() || DEFAULT_KONBINI_FOLDER);
+		const next = this.normalizeKonbiniFolderPath(folder);
 		if (next === this.data.konbiniFolder) return;
 		this.data.konbiniFolder = next;
 		await this.saveData(this.data);
@@ -169,6 +176,25 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		await this.updateSeedNote();
 		await this.refreshTemplates();
 		for (const board of this.boards) board.refresh();
+	}
+
+	/**
+	 * Normalize a settings path to the Konbini folder itself (vault-relative).
+	 * Accepts accidental Values.md / Templates suffixes and trailing slashes.
+	 */
+	private normalizeKonbiniFolderPath(folder: string): string {
+		let next = normalizePath(folder.trim() || DEFAULT_KONBINI_FOLDER);
+		if (next.endsWith(`/${VALUES_NOTE_NAME}`)) {
+			next = next.slice(0, -(`/${VALUES_NOTE_NAME}`).length);
+		} else if (next === VALUES_NOTE_NAME) {
+			next = DEFAULT_KONBINI_FOLDER;
+		} else if (next.endsWith(`/${TEMPLATES_SUBFOLDER}`)) {
+			next = next.slice(0, -(`/${TEMPLATES_SUBFOLDER}`).length);
+		} else if (next === TEMPLATES_SUBFOLDER) {
+			next = DEFAULT_KONBINI_FOLDER;
+		}
+		next = normalizePath(next.replace(/\/+$/, ""));
+		return next || DEFAULT_KONBINI_FOLDER;
 	}
 
 	/** Append a global column. No-op if the key already exists. */
@@ -375,13 +401,105 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		return null;
 	}
 
+	/**
+	 * Move the pre-folder seed note (`Konbini Kanban values.md`, at vault root or
+	 * relocated by the user) into `{konbiniFolder}/Values.md`. If both exist, merge
+	 * any user-added body or extra frontmatter into Values.md, then trash the leftover.
+	 */
 	private async migrateLegacySeedNote(): Promise<void> {
-		const legacy = this.app.vault.getAbstractFileByPath(normalizePath(LEGACY_SEED_NOTE_PATH));
-		const dest = valuesNotePath(this.data.konbiniFolder);
-		if (!(legacy instanceof TFile)) return;
-		if (this.app.vault.getAbstractFileByPath(dest)) return;
+		const legacy = this.findLegacySeedNote();
+		if (!legacy) return;
+
+		const destPath = valuesNotePath(this.data.konbiniFolder);
+		// Already the live Values note (e.g. user renamed it in place).
+		if (legacy.path === destPath) return;
+
 		await this.ensureFolder(this.data.konbiniFolder);
-		await this.app.fileManager.renameFile(legacy, dest);
+		const dest = this.app.vault.getAbstractFileByPath(destPath);
+
+		if (!(dest instanceof TFile)) {
+			await this.app.fileManager.renameFile(legacy, destPath);
+			return;
+		}
+
+		const customized = await this.mergeLegacySeedIntoValues(legacy, dest);
+		await this.app.vault.trash(legacy, true);
+		if (customized) {
+			new Notice(
+				"Konbini Kanban: merged your old seed note into the Konbini folder (original is in the trash)."
+			);
+		}
+	}
+
+	/** Find the legacy seed by exact root path, else by basename anywhere in the vault. */
+	private findLegacySeedNote(): TFile | null {
+		const atRoot = this.app.vault.getAbstractFileByPath(normalizePath(LEGACY_SEED_NOTE_PATH));
+		if (atRoot instanceof TFile) return atRoot;
+
+		const destPath = valuesNotePath(this.data.konbiniFolder);
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			if (file.basename === LEGACY_SEED_NOTE_BASENAME && file.path !== destPath) {
+				return file;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Copy user-authored content from the legacy root seed into Values.md.
+	 * Returns true if anything beyond the stock plugin body / managed props was merged.
+	 */
+	private async mergeLegacySeedIntoValues(legacy: TFile, dest: TFile): Promise<boolean> {
+		const legacyContent = await this.app.vault.read(legacy);
+		const destContent = await this.app.vault.read(dest);
+		const legacyBody = stripFrontmatter(legacyContent).trim();
+
+		const stockBodies = new Set([
+			"Maintained by Konbini Kanban to seed property suggestions. Safe to keep or move.",
+			"Maintained by Konbini Kanban to seed property suggestions.",
+			"",
+		]);
+
+		const legacyCustomBody = legacyBody.length > 0 && !stockBodies.has(legacyBody);
+		let customized = false;
+
+		if (legacyCustomBody && !destContent.includes(legacyBody)) {
+			customized = true;
+			await this.app.vault.process(dest, (data) => {
+				const fmMatch = data.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+				const fmBlock = fmMatch ? fmMatch[0] : "";
+				const currentBody = stripFrontmatter(data).trimEnd();
+				const nextBody =
+					!currentBody || stockBodies.has(currentBody.trim())
+						? legacyBody
+						: `${currentBody}\n\n${legacyBody}`;
+				return `${fmBlock}${nextBody}\n`;
+			});
+		}
+
+		const legacyFm = this.app.metadataCache.getFileCache(legacy)?.frontmatter ?? {};
+		const managedKeys = new Set<string>([
+			DEFAULTS.statusProp,
+			DEFAULTS.priorityProp,
+			DEFAULTS.labelsProp,
+			KONBINI_ROLE_PROP,
+			"position",
+		]);
+		const extraEntries = Object.entries(legacyFm).filter(([key]) => !managedKeys.has(key));
+		if (extraEntries.length > 0) {
+			let wroteExtra = false;
+			await this.app.fileManager.processFrontMatter(dest, (fm: Record<string, unknown>) => {
+				for (const [key, value] of extraEntries) {
+					if (fm[key] === undefined) {
+						fm[key] = value;
+						wroteExtra = true;
+					}
+				}
+			});
+			if (wroteExtra) customized = true;
+		}
+
+		return customized;
 	}
 
 	private async ensureValuesNote(): Promise<void> {
@@ -651,24 +769,13 @@ class TemplateEditModal extends Modal {
 				dd.onChange((v) => (this.tplPriority = v));
 			});
 
-		const knownLabels = this.plugin.data.customLabels.map((l) => l.name).join(", ");
 		new Setting(contentEl)
 			.setName("Labels")
-			.setDesc(
-				knownLabels
-					? `Comma-separated. Available: ${knownLabels}`
-					: "Comma-separated label names."
-			)
-			.addText((text) => {
-				text.setPlaceholder("bug, backend")
-					.setValue(this.tplLabels.join(", "));
-				text.onChange((v) => {
-					this.tplLabels = v
-						.split(",")
-						.map((s) => s.trim())
-						.filter(Boolean);
-				});
-			});
+			.setDesc("Pre-select labels when this template is applied.")
+			.setClass("bk-template-labels-setting");
+
+		const labelPicker = contentEl.createDiv("bk-template-label-picker");
+		this.renderLabelPicker(labelPicker);
 
 		new Setting(contentEl).addButton((btn) =>
 			btn
@@ -676,6 +783,46 @@ class TemplateEditModal extends Modal {
 				.setCta()
 				.onClick(() => void this.submit())
 		);
+	}
+
+	private renderLabelPicker(host: HTMLElement): void {
+		host.empty();
+		const selected = new Set(this.tplLabels);
+		const known = Array.from(
+			new Set([
+				...this.plugin.data.customLabels.map((l) => l.name),
+				...this.tplLabels,
+			])
+		).sort((a, b) => a.localeCompare(b));
+
+		if (known.length === 0) {
+			host.createDiv({
+				cls: "bk-template-label-empty",
+				text: "No labels yet — create them from a card's label picker.",
+			});
+			return;
+		}
+
+		for (const label of known) {
+			const def = this.plugin.data.customLabels.find((l) => l.name === label);
+			const row = host.createDiv("bk-template-label-row");
+			const box = row.createSpan("bk-check");
+			if (selected.has(label)) {
+				box.addClass("is-checked");
+				setIcon(box, "check");
+			}
+			const dot = row.createSpan("bk-label-dot");
+			if (def?.color) dot.style.background = def.color;
+			row.createSpan({ cls: "bk-template-label-name", text: label });
+			row.onclick = () => {
+				if (selected.has(label)) {
+					this.tplLabels = this.tplLabels.filter((l) => l !== label);
+				} else {
+					this.tplLabels = [...this.tplLabels, label];
+				}
+				this.renderLabelPicker(host);
+			};
+		}
 	}
 
 	private async submit(): Promise<void> {
@@ -726,13 +873,13 @@ class KonbiniSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Konbini folder")
+			.setName("Konbini folder path")
 			.setDesc(
-				"Vault folder for the Values seed note and task templates. Nested paths are fine (e.g. Projects/Konbini)."
+				"Vault-relative path to the Konbini folder (the folder that contains Values.md and Templates/). Example: Konbini or Projects/Konbini."
 			)
 			.addText((text) => {
 				let pending = this.plugin.data.konbiniFolder;
-				text.setPlaceholder(DEFAULT_KONBINI_FOLDER).setValue(pending);
+				text.setPlaceholder("Konbini").setValue(pending);
 				text.onChange((value) => {
 					pending = value;
 				});

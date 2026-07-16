@@ -6,6 +6,9 @@ export const DEFAULT_KONBINI_FOLDER = "Konbini";
 /** Legacy seed note path (pre-folder layout); migrated into `{konbiniFolder}/Values.md`. */
 export const LEGACY_SEED_NOTE_PATH = "Konbini Kanban values.md";
 
+/** Basename of the legacy seed note (matches even if the user moved it into a subfolder). */
+export const LEGACY_SEED_NOTE_BASENAME = "Konbini Kanban values";
+
 /** Frontmatter key marking Konbini-owned notes (values seed / templates). */
 export const KONBINI_ROLE_PROP = "konbini-role";
 
