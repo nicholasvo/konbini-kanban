@@ -9,6 +9,7 @@ import {
 	TFolder,
 	normalizePath,
 	setIcon,
+	AbstractInputSuggest,
 	type BasesViewRegistration,
 } from "obsidian";
 import {
@@ -863,6 +864,33 @@ class LabelEditModal extends Modal {
 	}
 }
 
+/** Inline folder search for the Konbini folder path setting. */
+class FolderSuggest extends AbstractInputSuggest<TFolder> {
+	private onChoose: (folder: TFolder) => void;
+
+	constructor(app: App, inputEl: HTMLInputElement, onChoose: (folder: TFolder) => void) {
+		super(app, inputEl);
+		this.onChoose = onChoose;
+	}
+
+	protected getSuggestions(query: string): TFolder[] {
+		const q = query.toLowerCase().trim();
+		const folders = this.app.vault.getAllFolders(/* includeRoot */ false);
+		if (!q) return folders;
+		return folders.filter((f) => f.path.toLowerCase().includes(q));
+	}
+
+	renderSuggestion(folder: TFolder, el: HTMLElement): void {
+		el.setText(folder.path);
+	}
+
+	selectSuggestion(folder: TFolder): void {
+		this.setValue(folder.path);
+		this.close();
+		this.onChoose(folder);
+	}
+}
+
 /** Modal for creating or editing a description-body template. */
 class TemplateEditModal extends Modal {
 	private plugin: KonbiniKanbanPlugin;
@@ -906,7 +934,7 @@ class TemplateEditModal extends Modal {
 
 		new Setting(contentEl)
 			.setName("Description")
-			.setDesc("Text inserted into the new task's body.")
+			.setDesc("Copied into the new task's body when this template is applied.")
 			.setClass("bk-template-body-setting")
 			.addTextArea((area) => {
 				area.setPlaceholder("## Steps to reproduce\n\n## Expected\n\n## Actual").setValue(
@@ -916,7 +944,12 @@ class TemplateEditModal extends Modal {
 				area.inputEl.rows = 8;
 			});
 
-		new Setting(contentEl).setName("Prefill values").setHeading();
+		new Setting(contentEl)
+			.setName("Prefill values")
+			.setDesc(
+				"Copied into a new task when this template is applied. Editing a template does not update tasks already created from it."
+			)
+			.setHeading();
 
 		const allStatuses = this.plugin.data.columns;
 		new Setting(contentEl)
@@ -1049,17 +1082,17 @@ class KonbiniSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Konbini folder path")
 			.setDesc(
-				"Vault-relative path to the Konbini folder (the folder that contains Values.md and Templates/). Example: Konbini or Projects/Konbini."
+				"Folder that contains Values.md and Templates/. Prefills to the Konbini folder we create; search to pick a different folder if you move it."
 			)
 			.addText((text) => {
-				let pending = this.plugin.data.konbiniFolder;
-				text.setPlaceholder("Konbini").setValue(pending);
-				text.onChange((value) => {
-					pending = value;
+				text.setPlaceholder("Konbini").setValue(this.plugin.data.konbiniFolder);
+				const apply = (raw: string) =>
+					void this.plugin.setKonbiniFolder(raw).then(() => this.display());
+				new FolderSuggest(this.app, text.inputEl, (folder) => {
+					text.setValue(folder.path);
+					apply(folder.path);
 				});
-				text.inputEl.addEventListener("blur", () => {
-					void this.plugin.setKonbiniFolder(pending).then(() => this.display());
-				});
+				text.inputEl.addEventListener("blur", () => apply(text.getValue()));
 			});
 
 		// Global columns — default for views without a per-board statuses override.
