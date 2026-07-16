@@ -10,12 +10,7 @@ import {
 } from "./constants";
 import { KanbanConfig, resolveConfig } from "./config";
 import type KonbiniKanbanPlugin from "./main";
-import {
-	Task,
-	readTask,
-	setStatus,
-	collectLabels,
-} from "./data";
+import { Task, readTask, setStatus, collectLabels } from "./data";
 import { renderCard } from "./card";
 import { CreateTaskModal } from "./modal-create";
 import { EditTaskModal } from "./modal-edit";
@@ -123,10 +118,10 @@ export class KanbanBoard {
 		const key = name.trim().toLowerCase();
 		if (key.length === 0) return this.cfg.defaultStatus;
 		if (this.statusByKey.has(key)) return key;
-		await this.plugin.addCustomStatus({
+		await this.plugin.addColumn({
 			key,
 			label: name.trim(),
-			color: color ?? this.paletteColor(this.plugin.data.customStatuses.length),
+			color: color ?? this.paletteColor(this.plugin.data.columns.length),
 			icon: "unstarted",
 			emoji: emoji || undefined,
 		});
@@ -171,7 +166,7 @@ export class KanbanBoard {
 	}
 
 	isCustomStatus(key: string): boolean {
-		return this.plugin.data.customStatuses.some((s) => s.key === key);
+		return this.plugin.data.columns.some((s) => s.key === key);
 	}
 	isCustomPriority(key: string): boolean {
 		return this.plugin.data.customPriorities.some((p) => p.key === key);
@@ -181,7 +176,7 @@ export class KanbanBoard {
 	}
 
 	async deleteStatus(key: string): Promise<void> {
-		await this.plugin.removeCustomStatus(key);
+		await this.plugin.removeColumn(key);
 		this.refresh();
 	}
 	async deletePriority(key: string): Promise<void> {
@@ -231,7 +226,8 @@ export class KanbanBoard {
 			arr.push(task);
 			this.childrenByParent.set(task.parentPath, arr);
 		}
-		for (const arr of this.childrenByParent.values()) arr.sort((a, b) => this.compareTasks(a, b));
+		for (const arr of this.childrenByParent.values())
+			arr.sort((a, b) => this.compareTasks(a, b));
 	}
 
 	private compareTasks(a: Task, b: Task): number {
@@ -348,7 +344,10 @@ export class KanbanBoard {
 				const row = panel.createDiv("bk-hidden-row");
 				row.appendChild(statusGlyph(status));
 				row.createSpan({ cls: "bk-hidden-label", text: status.label });
-				row.createSpan({ cls: "bk-hidden-count", text: String((buckets.get(status.key) ?? []).length) });
+				row.createSpan({
+					cls: "bk-hidden-count",
+					text: String((buckets.get(status.key) ?? []).length),
+				});
 				row.setAttr("aria-label", `Show ${status.label}`);
 				row.onclick = () => void this.plugin.setStatusHidden(status.key, false);
 			}
@@ -510,7 +509,9 @@ export class KanbanBoard {
 	/** Snapshot every card's rect by element (for in-drag reflow FLIP). */
 	captureCardRects(): Map<HTMLElement, DOMRect> {
 		const rects = new Map<HTMLElement, DOMRect>();
-		this.rootEl.querySelectorAll<HTMLElement>(".bk-card").forEach((el) => rects.set(el, el.getBoundingClientRect()));
+		this.rootEl
+			.querySelectorAll<HTMLElement>(".bk-card")
+			.forEach((el) => rects.set(el, el.getBoundingClientRect()));
 		return rects;
 	}
 
@@ -525,7 +526,10 @@ export class KanbanBoard {
 			const dy = prev.top - now.top;
 			if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
 			el.animate(
-				[{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0px, 0px)" }],
+				[
+					{ transform: `translate(${dx}px, ${dy}px)` },
+					{ transform: "translate(0px, 0px)" },
+				],
 				{ duration: 180, easing: "cubic-bezier(0.19, 1, 0.22, 1)" }
 			);
 		});
@@ -593,7 +597,7 @@ export class KanbanBasesView extends BasesView {
 		const cfg = resolveConfig(
 			{ get: (k: string) => this.config.get(k) },
 			{
-				statuses: this.plugin.data.customStatuses,
+				columns: this.plugin.data.columns,
 				priorities: this.plugin.data.customPriorities,
 				labels: this.plugin.data.customLabels,
 			}

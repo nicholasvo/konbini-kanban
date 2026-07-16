@@ -42,23 +42,36 @@ export function statusIcon(kind: StatusIconKind, color: string): SVGSVGElement {
 		case "backlog":
 			// Dashed ring.
 			child(el, "circle", {
-				cx: "8", cy: "8", r: "6.5",
-				stroke: color, "stroke-width": "1.5", fill: "none",
-				"stroke-dasharray": "1.6 1.8", "stroke-linecap": "round",
+				cx: "8",
+				cy: "8",
+				r: "6.5",
+				stroke: color,
+				"stroke-width": "1.5",
+				fill: "none",
+				"stroke-dasharray": "1.6 1.8",
+				"stroke-linecap": "round",
 			});
 			break;
 		case "unstarted":
 			// Empty ring.
 			child(el, "circle", {
-				cx: "8", cy: "8", r: "6.5",
-				stroke: color, "stroke-width": "1.5", fill: "none",
+				cx: "8",
+				cy: "8",
+				r: "6.5",
+				stroke: color,
+				"stroke-width": "1.5",
+				fill: "none",
 			});
 			break;
 		case "started":
 			// Ring + filled wedge (clockwise from 12 o'clock, ~55%).
 			child(el, "circle", {
-				cx: "8", cy: "8", r: "6.5",
-				stroke: color, "stroke-width": "1.5", fill: "none",
+				cx: "8",
+				cy: "8",
+				r: "6.5",
+				stroke: color,
+				"stroke-width": "1.5",
+				fill: "none",
 			});
 			child(el, "path", {
 				d: "M8 8 L8 3.5 A4.5 4.5 0 1 1 4.18 5.7 Z",
@@ -69,15 +82,20 @@ export function statusIcon(kind: StatusIconKind, color: string): SVGSVGElement {
 			child(el, "circle", { cx: "8", cy: "8", r: "7", fill: color });
 			child(el, "path", {
 				d: "M4.7 8.2 L7 10.4 L11.3 5.8",
-				stroke: "#fff", "stroke-width": "1.6",
-				"stroke-linecap": "round", "stroke-linejoin": "round", fill: "none",
+				stroke: "#fff",
+				"stroke-width": "1.6",
+				"stroke-linecap": "round",
+				"stroke-linejoin": "round",
+				fill: "none",
 			});
 			break;
 		case "canceled":
 			child(el, "circle", { cx: "8", cy: "8", r: "7", fill: color });
 			child(el, "path", {
 				d: "M5.5 5.5 L10.5 10.5 M10.5 5.5 L5.5 10.5",
-				stroke: "#fff", "stroke-width": "1.6", "stroke-linecap": "round",
+				stroke: "#fff",
+				"stroke-width": "1.6",
+				"stroke-linecap": "round",
 			});
 			break;
 	}
@@ -95,8 +113,11 @@ function bars(filled: number): SVGSVGElement {
 	];
 	cfg.forEach((b, i) => {
 		child(el, "rect", {
-			x: String(b.x), y: String(b.y),
-			width: "3.5", height: String(b.h), rx: "1",
+			x: String(b.x),
+			y: String(b.y),
+			width: "3.5",
+			height: String(b.h),
+			rx: "1",
 			fill: "currentColor",
 			"fill-opacity": i < filled ? "1" : "0.28",
 		});
@@ -106,18 +127,39 @@ function bars(filled: number): SVGSVGElement {
 
 export function priorityIcon(kind: PriorityIconKind): SVGSVGElement {
 	switch (kind) {
-		case "high": return bars(3);
-		case "medium": return bars(2);
-		case "low": return bars(1);
+		case "high":
+			return bars(3);
+		case "medium":
+			return bars(2);
+		case "low":
+			return bars(1);
 		case "urgent": {
 			const el = svg();
 			el.addClass("bk-icon-urgent");
 			child(el, "rect", {
-				x: "1.5", y: "1.5", width: "13", height: "13", rx: "3.5",
+				x: "1.5",
+				y: "1.5",
+				width: "13",
+				height: "13",
+				rx: "3.5",
 				fill: "currentColor",
 			});
-			child(el, "rect", { x: "7", y: "3.75", width: "2", height: "5.5", rx: "1", fill: "#fff" });
-			child(el, "rect", { x: "7", y: "10.75", width: "2", height: "2", rx: "1", fill: "#fff" });
+			child(el, "rect", {
+				x: "7",
+				y: "3.75",
+				width: "2",
+				height: "5.5",
+				rx: "1",
+				fill: "#fff",
+			});
+			child(el, "rect", {
+				x: "7",
+				y: "10.75",
+				width: "2",
+				height: "2",
+				rx: "1",
+				fill: "#fff",
+			});
 			return el;
 		}
 		case "none":
@@ -126,8 +168,13 @@ export function priorityIcon(kind: PriorityIconKind): SVGSVGElement {
 			el.addClass("bk-icon-current");
 			[2, 7, 12].forEach((x) => {
 				child(el, "rect", {
-					x: String(x), y: "7.25", width: "2.5", height: "1.5", rx: "0.75",
-					fill: "currentColor", "fill-opacity": "0.5",
+					x: String(x),
+					y: "7.25",
+					width: "2.5",
+					height: "1.5",
+					rx: "0.75",
+					fill: "currentColor",
+					"fill-opacity": "0.5",
 				});
 			});
 			return el;
@@ -142,15 +189,25 @@ export function rollupRing(done: number, total: number): SVGSVGElement {
 	const c = 2 * Math.PI * r;
 	const frac = total > 0 ? done / total : 0;
 	child(el, "circle", {
-		cx: "8", cy: "8", r: String(r),
-		stroke: "currentColor", "stroke-width": "2", fill: "none", "stroke-opacity": "0.25",
+		cx: "8",
+		cy: "8",
+		r: String(r),
+		stroke: "currentColor",
+		"stroke-width": "2",
+		fill: "none",
+		"stroke-opacity": "0.25",
 	});
 	if (frac > 0) {
 		child(el, "circle", {
-			cx: "8", cy: "8", r: String(r),
-			stroke: "currentColor", "stroke-width": "2", fill: "none",
+			cx: "8",
+			cy: "8",
+			r: String(r),
+			stroke: "currentColor",
+			"stroke-width": "2",
+			fill: "none",
 			"stroke-dasharray": `${c * frac} ${c}`,
-			"stroke-linecap": "round", transform: "rotate(-90 8 8)",
+			"stroke-linecap": "round",
+			transform: "rotate(-90 8 8)",
 		});
 	}
 	return el;

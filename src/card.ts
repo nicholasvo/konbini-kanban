@@ -88,7 +88,9 @@ export function renderCard(board: KanbanBoard, task: Task): HTMLElement {
 		pill.setAttr("aria-label", "Start date");
 		pill.onclick = (e) => {
 			e.stopPropagation();
-			datePopover(pill, task.startDate, (v) => setDate(board.app, task.file, cfg, "start", v));
+			datePopover(pill, task.startDate, (v) =>
+				setDate(board.app, task.file, cfg, "start", v)
+			);
 		};
 	}
 	if (task.endDate) {
@@ -166,9 +168,11 @@ export function renderCard(board: KanbanBoard, task: Task): HTMLElement {
 	// Disabled in the narrow layout — status changes go through the edit sheet.
 	cardEl.addEventListener("pointerdown", (e) => {
 		if (board.isNarrow()) return;
-		if ((e.target as HTMLElement).closest(
-			".bk-card-status, .bk-card-priority, .bk-card-addlabel, .bk-card-subadd, .bk-card-date-pill, .bk-card-rollup, .bk-sublist"
-		))
+		if (
+			(e.target as HTMLElement).closest(
+				".bk-card-status, .bk-card-priority, .bk-card-addlabel, .bk-card-subadd, .bk-card-date-pill, .bk-card-rollup, .bk-sublist"
+			)
+		)
 			return;
 		startCardDrag(board, task, cardEl, e);
 	});

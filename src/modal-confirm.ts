@@ -11,7 +11,12 @@ export class ConfirmModal extends Modal {
 	private onResult: (ok: boolean) => void;
 	private answered = false;
 
-	constructor(app: App, message: string, onResult: (ok: boolean) => void, confirmText = "Confirm") {
+	constructor(
+		app: App,
+		message: string,
+		onResult: (ok: boolean) => void,
+		confirmText = "Confirm"
+	) {
 		super(app);
 		this.message = message;
 		this.onResult = onResult;
@@ -22,7 +27,12 @@ export class ConfirmModal extends Modal {
 		this.contentEl.createEl("p", { text: this.message });
 		new Setting(this.contentEl)
 			.addButton((b) => b.setButtonText("Cancel").onClick(() => this.finish(false)))
-			.addButton((b) => b.setButtonText(this.confirmText).setCta().onClick(() => this.finish(true)));
+			.addButton((b) =>
+				b
+					.setButtonText(this.confirmText)
+					.setCta()
+					.onClick(() => this.finish(true))
+			);
 	}
 
 	private finish(ok: boolean): void {

@@ -21,7 +21,10 @@ function asStringArray(v: unknown): string[] {
 	if (Array.isArray(v)) return v.map((x) => String(x)).filter((s) => s.length > 0);
 	if (typeof v === "string" && v.trim().length > 0) {
 		// Allow comma-separated single-line lists.
-		return v.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+		return v
+			.split(",")
+			.map((s) => s.trim())
+			.filter((s) => s.length > 0);
 	}
 	return [];
 }
@@ -73,27 +76,47 @@ function asDate(v: unknown): string | null {
 	return m ? m[0] : s;
 }
 
-export async function setStatus(app: App, file: TFile, cfg: KanbanConfig, status: string): Promise<void> {
+export async function setStatus(
+	app: App,
+	file: TFile,
+	cfg: KanbanConfig,
+	status: string
+): Promise<void> {
 	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		fm[cfg.statusProp] = status;
 	});
 }
 
-export async function setPriority(app: App, file: TFile, cfg: KanbanConfig, priority: string): Promise<void> {
+export async function setPriority(
+	app: App,
+	file: TFile,
+	cfg: KanbanConfig,
+	priority: string
+): Promise<void> {
 	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		if (priority === "no priority") delete fm[cfg.priorityProp];
 		else fm[cfg.priorityProp] = priority;
 	});
 }
 
-export async function setLabels(app: App, file: TFile, cfg: KanbanConfig, labels: string[]): Promise<void> {
+export async function setLabels(
+	app: App,
+	file: TFile,
+	cfg: KanbanConfig,
+	labels: string[]
+): Promise<void> {
 	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		if (labels.length === 0) delete fm[cfg.labelsProp];
 		else fm[cfg.labelsProp] = labels;
 	});
 }
 
-export async function setTitle(app: App, file: TFile, cfg: KanbanConfig, title: string): Promise<void> {
+export async function setTitle(
+	app: App,
+	file: TFile,
+	cfg: KanbanConfig,
+	title: string
+): Promise<void> {
 	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		fm[cfg.titleProp] = title;
 	});

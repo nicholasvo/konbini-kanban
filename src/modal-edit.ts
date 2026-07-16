@@ -1,6 +1,15 @@
 import { Modal, Notice, setIcon } from "obsidian";
 import type { KanbanBoard } from "./view";
-import { Task, setTitle, setStatus, setPriority, setLabels, setDate, readBody, setBody } from "./data";
+import {
+	Task,
+	setTitle,
+	setStatus,
+	setPriority,
+	setLabels,
+	setDate,
+	readBody,
+	setBody,
+} from "./data";
 import { statusGlyph, priorityGlyph } from "./icons";
 import { statusPopover, priorityPopover, labelPopover, datePopover } from "./pickers";
 
@@ -186,12 +195,16 @@ export class EditTaskModal extends Modal {
 
 		this.startPill.empty();
 		setIcon(this.startPill.createSpan("bk-pill-icon"), "calendar");
-		this.startPill.createSpan({ text: this.startDate ? `Start ${fmtDate(this.startDate)}` : "Start date" });
+		this.startPill.createSpan({
+			text: this.startDate ? `Start ${fmtDate(this.startDate)}` : "Start date",
+		});
 		this.startPill.toggleClass("is-set", !!this.startDate);
 
 		this.endPill.empty();
 		setIcon(this.endPill.createSpan("bk-pill-icon"), "calendar-check");
-		this.endPill.createSpan({ text: this.endDate ? `Due ${fmtDate(this.endDate)}` : "End date" });
+		this.endPill.createSpan({
+			text: this.endDate ? `Due ${fmtDate(this.endDate)}` : "End date",
+		});
 		this.endPill.toggleClass("is-set", !!this.endDate);
 	}
 
@@ -209,8 +222,10 @@ export class EditTaskModal extends Modal {
 		if (this.status !== this.task.status) await setStatus(app, file, cfg, this.status);
 		if (this.priority !== (this.task.priority || "no priority"))
 			await setPriority(app, file, cfg, this.priority);
-		if (!sameLabels(this.labels, this.task.labels)) await setLabels(app, file, cfg, this.labels);
-		if (this.startDate !== this.task.startDate) await setDate(app, file, cfg, "start", this.startDate);
+		if (!sameLabels(this.labels, this.task.labels))
+			await setLabels(app, file, cfg, this.labels);
+		if (this.startDate !== this.task.startDate)
+			await setDate(app, file, cfg, "start", this.startDate);
 		if (this.endDate !== this.task.endDate) await setDate(app, file, cfg, "end", this.endDate);
 		// Only touch the body once it has actually loaded, so a quick save can't
 		// overwrite the note with an empty description.

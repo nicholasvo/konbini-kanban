@@ -77,7 +77,9 @@
 	color: var(--text-muted);
 	font-size: 16px;
 	line-height: 1;
-	transition: background-color 80ms ease, color 80ms ease;
+	transition:
+		background-color 80ms ease,
+		color 80ms ease;
 }
 
 .bk-column-add:hover {
@@ -208,7 +210,10 @@ body.bk-dragging .bk-column-addcard {
 	gap: 6px;
 	cursor: pointer;
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-	transition: border-color 100ms ease, box-shadow 100ms ease, transform 100ms ease;
+	transition:
+		border-color 100ms ease,
+		box-shadow 100ms ease,
+		transform 100ms ease;
 }
 
 .bk-card:hover {
@@ -310,7 +315,9 @@ body.bk-dragging {
 	border-radius: 5px;
 	cursor: pointer;
 	color: var(--text-muted);
-	transition: background-color 80ms ease, color 80ms ease;
+	transition:
+		background-color 80ms ease,
+		color 80ms ease;
 }
 
 .bk-card-priority:hover,
@@ -477,7 +484,9 @@ body.bk-dragging {
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 	cursor: pointer;
-	transition: background-color 80ms ease, border-color 80ms ease;
+	transition:
+		background-color 80ms ease,
+		border-color 80ms ease;
 }
 
 .bk-card-date-pill:hover {
@@ -828,7 +837,9 @@ body.bk-dragging {
 	color: var(--text-normal);
 	cursor: pointer;
 	background: var(--background-primary);
-	transition: background-color 80ms ease, border-color 80ms ease;
+	transition:
+		background-color 80ms ease,
+		border-color 80ms ease;
 }
 
 .bk-pill:hover {
@@ -874,7 +885,9 @@ body.bk-dragging {
 	border-radius: 6px;
 	cursor: pointer;
 	color: var(--text-muted);
-	transition: background-color 80ms ease, color 80ms ease;
+	transition:
+		background-color 80ms ease,
+		color 80ms ease;
 }
 
 .bk-attach-btn:hover {
@@ -959,7 +972,9 @@ body.bk-dragging {
 	cursor: pointer;
 	color: var(--text-muted);
 	flex: 0 0 auto;
-	transition: background-color 80ms ease, color 80ms ease;
+	transition:
+		background-color 80ms ease,
+		color 80ms ease;
 }
 
 .bk-attachment-remove:hover {
@@ -1014,13 +1029,15 @@ body.bk-dragging {
 /* ---- Motion: surfaces -------------------------------------- */
 
 .motion-surface {
-	--motion-surface-start-transform: translateY(calc(var(--motion-distance-xs) * -1)) scale(var(--motion-scale-from));
+	--motion-surface-start-transform: translateY(calc(var(--motion-distance-xs) * -1))
+		scale(var(--motion-scale-from));
 	transform-origin: var(--motion-transform-origin, top left);
 	will-change: opacity, transform;
 }
 
 .motion-surface[data-side="top"] {
-	--motion-surface-start-transform: translateY(var(--motion-distance-xs)) scale(var(--motion-scale-from));
+	--motion-surface-start-transform: translateY(var(--motion-distance-xs))
+		scale(var(--motion-scale-from));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1075,7 +1092,8 @@ body.bk-dragging {
 
 /* Exit is the inverse of the entrance (snappier curve). */
 .modal.bk-create-modal.bk-dialog-closing {
-	animation: motion-dialog-exit var(--motion-duration-basic) var(--motion-ease-exit-snappy) forwards;
+	animation: motion-dialog-exit var(--motion-duration-basic) var(--motion-ease-exit-snappy)
+		forwards;
 }
 
 @keyframes motion-dialog-exit {
@@ -1180,8 +1198,12 @@ body.bk-dragging {
 		opacity: 0;
 		animation: bk-ascii-cycle 1.3s steps(1, end) infinite;
 	}
-	.bk-ascii-frame:nth-child(1) { animation-delay: 0s; }
-	.bk-ascii-frame:nth-child(2) { animation-delay: 0.65s; }
+	.bk-ascii-frame:nth-child(1) {
+		animation-delay: 0s;
+	}
+	.bk-ascii-frame:nth-child(2) {
+		animation-delay: 0.65s;
+	}
 }
 
 /* Reduced motion: just show the first frame. */
@@ -1192,8 +1214,14 @@ body.bk-dragging {
 }
 
 @keyframes bk-ascii-cycle {
-	0%, 50% { opacity: 1; }
-	50.01%, 100% { opacity: 0; }
+	0%,
+	50% {
+		opacity: 1;
+	}
+	50.01%,
+	100% {
+		opacity: 0;
+	}
 }
 
 .bk-empty-caption {
@@ -1232,7 +1260,10 @@ body.bk-dragging {
 	color: var(--text-faint);
 	opacity: 0;
 	flex: 0 0 auto;
-	transition: opacity 80ms ease, background-color 80ms ease, color 80ms ease;
+	transition:
+		opacity 80ms ease,
+		background-color 80ms ease,
+		color 80ms ease;
 }
 
 .bk-popover-item:hover .bk-popover-del,
@@ -1308,7 +1339,9 @@ body.bk-dragging {
 	border-radius: 50%;
 	cursor: pointer;
 	box-shadow: 0 0 0 1px var(--background-modifier-border) inset;
-	transition: transform 80ms ease, box-shadow 80ms ease;
+	transition:
+		transform 80ms ease,
+		box-shadow 80ms ease;
 }
 
 .bk-swatch:hover {
@@ -1316,7 +1349,9 @@ body.bk-dragging {
 }
 
 .bk-swatch.is-selected {
-	box-shadow: 0 0 0 2px var(--background-primary) inset, 0 0 0 4px currentColor;
+	box-shadow:
+		0 0 0 2px var(--background-primary) inset,
+		0 0 0 4px currentColor;
 	color: var(--text-normal);
 }
 
@@ -1337,7 +1372,10 @@ body.bk-dragging {
 	cursor: pointer;
 	color: var(--text-muted);
 	opacity: 0;
-	transition: opacity 80ms ease, background-color 80ms ease, color 80ms ease;
+	transition:
+		opacity 80ms ease,
+		background-color 80ms ease,
+		color 80ms ease;
 }
 
 .bk-column-header:hover .bk-column-menu {
@@ -1516,7 +1554,9 @@ body.bk-dragging {
 /* Clear Obsidian's bottom mobile toolbar so the last card isn't hidden behind
    it. The FAB keeps its original lower position (see .bk-fab). */
 .is-mobile .bk-root.bk-narrow .bk-columns {
-	padding-bottom: calc(12px + var(--mobile-navbar-height, 48px) + env(safe-area-inset-bottom, 0px));
+	padding-bottom: calc(
+		12px + var(--mobile-navbar-height, 48px) + env(safe-area-inset-bottom, 0px)
+	);
 }
 
 /* Roomier tap targets for the in-card controls on touch layouts. */

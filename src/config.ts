@@ -38,11 +38,10 @@ function str(reader: RawConfigReader, key: string, fallback: string): string {
 }
 
 /**
- * Parse an optional comma-separated "key:Label" override string into a status
- * set, preserving order. Falls back to the defaults when absent or unparseable.
+ * Parse a comma-separated "key:Label" override string into a status set,
+ * preserving order. Caller must pass a non-empty string.
  */
-function parseStatuses(raw: unknown): StatusDef[] {
-	if (typeof raw !== "string" || raw.trim().length === 0) return DEFAULT_STATUSES;
+function parseStatuses(raw: string): StatusDef[] {
 	const byKey = new Map(DEFAULT_STATUSES.map((s) => [s.key, s]));
 	const out: StatusDef[] = [];
 	for (const part of raw.split(",")) {
@@ -64,14 +63,15 @@ function titleCase(s: string): string {
 	return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** User-created statuses/priorities/labels, persisted in plugin data. */
+/** Plugin data pieces that feed resolveConfig. */
 export interface CustomDefs {
-	statuses?: StatusDef[];
+	/** Global column list from Settings. Used when the view has no statuses override. */
+	columns?: StatusDef[];
 	priorities?: PriorityDef[];
 	labels?: LabelDef[];
 }
 
-function mergeStatuses(base: StatusDef[], custom: StatusDef[]): StatusDef[] {
+export function mergeStatuses(base: StatusDef[], custom: StatusDef[]): StatusDef[] {
 	const seen = new Set(base.map((s) => s.key));
 	return [...base, ...custom.filter((s) => !seen.has(s.key))];
 }
@@ -81,7 +81,24 @@ function mergePriorities(base: PriorityDef[], custom: PriorityDef[]): PriorityDe
 	return [...base, ...custom.filter((p) => !seen.has(p.key))];
 }
 
+/**
+ * Resolve view options + plugin data into a KanbanConfig.
+ *
+ * Column set:
+ * 1. Per-board `statuses` override (non-empty) — wins, same as before
+ * 2. Else global Settings `columns`
+ * 3. Else Linear DEFAULT_STATUSES
+ */
 export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}): KanbanConfig {
+	const rawStatuses = reader.get("statuses");
+	const hasOverride = typeof rawStatuses === "string" && rawStatuses.trim().length > 0;
+	const globalColumns = custom.columns ?? [];
+	const statuses = hasOverride
+		? parseStatuses(rawStatuses)
+		: globalColumns.length > 0
+			? globalColumns
+			: DEFAULT_STATUSES;
+
 	return {
 		statusProp: str(reader, "statusProp", DEFAULTS.statusProp),
 		priorityProp: str(reader, "priorityProp", DEFAULTS.priorityProp),
@@ -91,7 +108,7 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 		startDateProp: str(reader, "startDateProp", DEFAULTS.startDateProp),
 		endDateProp: str(reader, "endDateProp", DEFAULTS.endDateProp),
 		defaultStatus: str(reader, "defaultStatus", DEFAULTS.defaultStatus),
-		statuses: mergeStatuses(parseStatuses(reader.get("statuses")), custom.statuses ?? []),
+		statuses,
 		priorities: mergePriorities(DEFAULT_PRIORITIES, custom.priorities ?? []),
 		labelDefs: custom.labels ?? [],
 	};
@@ -100,17 +117,57 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 /** Options array passed to registerBasesView. */
 export function viewOptions() {
 	return [
-		{ type: "text", displayName: "Status property", key: "statusProp", default: DEFAULTS.statusProp },
-		{ type: "text", displayName: "Priority property", key: "priorityProp", default: DEFAULTS.priorityProp },
-		{ type: "text", displayName: "Labels property", key: "labelsProp", default: DEFAULTS.labelsProp },
-		{ type: "text", displayName: "Parent property", key: "parentProp", default: DEFAULTS.parentProp },
-		{ type: "text", displayName: "Title property", key: "titleProp", default: DEFAULTS.titleProp },
-		{ type: "text", displayName: "Start date property", key: "startDateProp", default: DEFAULTS.startDateProp },
-		{ type: "text", displayName: "End date property", key: "endDateProp", default: DEFAULTS.endDateProp },
-		{ type: "text", displayName: "Default status (new tasks)", key: "defaultStatus", default: DEFAULTS.defaultStatus },
 		{
 			type: "text",
-			displayName: "Columns (key:Label, comma-separated)",
+			displayName: "Status property",
+			key: "statusProp",
+			default: DEFAULTS.statusProp,
+		},
+		{
+			type: "text",
+			displayName: "Priority property",
+			key: "priorityProp",
+			default: DEFAULTS.priorityProp,
+		},
+		{
+			type: "text",
+			displayName: "Labels property",
+			key: "labelsProp",
+			default: DEFAULTS.labelsProp,
+		},
+		{
+			type: "text",
+			displayName: "Parent property",
+			key: "parentProp",
+			default: DEFAULTS.parentProp,
+		},
+		{
+			type: "text",
+			displayName: "Title property",
+			key: "titleProp",
+			default: DEFAULTS.titleProp,
+		},
+		{
+			type: "text",
+			displayName: "Start date property",
+			key: "startDateProp",
+			default: DEFAULTS.startDateProp,
+		},
+		{
+			type: "text",
+			displayName: "End date property",
+			key: "endDateProp",
+			default: DEFAULTS.endDateProp,
+		},
+		{
+			type: "text",
+			displayName: "Default status (new tasks)",
+			key: "defaultStatus",
+			default: DEFAULTS.defaultStatus,
+		},
+		{
+			type: "text",
+			displayName: "Columns override (optional — overrides global Settings when set)",
 			key: "statuses",
 			default: "",
 		},

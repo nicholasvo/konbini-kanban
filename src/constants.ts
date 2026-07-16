@@ -14,12 +14,7 @@ export interface StatusDef {
 	emoji?: string;
 }
 
-export type StatusIconKind =
-	| "backlog"
-	| "unstarted"
-	| "started"
-	| "done"
-	| "canceled";
+export type StatusIconKind = "backlog" | "unstarted" | "started" | "done" | "canceled";
 
 export interface PriorityDef {
 	key: string;
@@ -102,6 +97,11 @@ export const STATUS_COLOR_PALETTE = [
 	"#16a3a3",
 	"#d4b106",
 ];
+
+/** Normalize a column/status name to the frontmatter key (lowercase trim). */
+export function buildColumnKey(name: string): string {
+	return name.trim().toLowerCase();
+}
 
 /** Default frontmatter property names. All are remappable via view options. */
 export const DEFAULTS = {
