@@ -4,9 +4,14 @@ import {
 	KONBINI_ROLE_PROP,
 	KONBINI_ROLE_TEMPLATE,
 	TEMPLATES_SUBFOLDER,
+	VALUES_NOTE_NAME,
 	type Template,
 } from "./constants";
 
+/** `{konbiniFolder}/Values.md` */
+export function valuesNotePath(konbiniFolder: string): string {
+	return normalizePath(`${konbiniFolder}/${VALUES_NOTE_NAME}`);
+}
 
 /** `{konbiniFolder}/Templates` */
 export function templatesFolderPath(konbiniFolder: string): string {

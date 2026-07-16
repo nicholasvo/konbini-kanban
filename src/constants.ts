@@ -1,15 +1,18 @@
 export const KANBAN_VIEW_TYPE = "kanban";
 
-/** Plugin-maintained note that seeds Obsidian's property typeahead. */
-export const SEED_NOTE_PATH = "Konbini Kanban values.md";
-
-/** Default vault folder for task templates. */
+/** Default vault folder for Values seed note + Templates. Overridable via settings. */
 export const DEFAULT_KONBINI_FOLDER = "Konbini";
 
-/** Frontmatter key marking Konbini-owned template notes. */
+/** Legacy seed note path (pre-folder layout); migrated into `{konbiniFolder}/Values.md`. */
+export const LEGACY_SEED_NOTE_PATH = "Konbini Kanban values.md";
+
+/** Frontmatter key marking Konbini-owned notes (values seed / templates). */
 export const KONBINI_ROLE_PROP = "konbini-role";
+
+export const KONBINI_ROLE_VALUES = "values";
 export const KONBINI_ROLE_TEMPLATE = "template";
 
+export const VALUES_NOTE_NAME = "Values.md";
 export const TEMPLATES_SUBFOLDER = "Templates";
 
 export interface StatusDef {

@@ -21,7 +21,9 @@ import {
 	DEFAULT_LABELS,
 	DEFAULTS,
 	DEFAULT_KONBINI_FOLDER,
-	SEED_NOTE_PATH,
+	LEGACY_SEED_NOTE_PATH,
+	KONBINI_ROLE_PROP,
+	KONBINI_ROLE_VALUES,
 	STATUS_COLOR_PALETTE,
 	buildColumnKey,
 } from "./constants";
@@ -34,6 +36,7 @@ import {
 	serializeTemplate,
 	templateNotePath,
 	templatesFolderPath,
+	valuesNotePath,
 } from "./templates";
 
 /** Persisted plugin data: columns, priorities/labels, and prefs. */
@@ -141,8 +144,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 
 	/** True if a path is inside the configured Konbini folder (seed + templates). */
 	isKonbiniManagedPath(path: string): boolean {
-		if (normalizePath(path) === normalizePath(SEED_NOTE_PATH)) return true;
-		return isUnderKonbiniFolder(templatesFolderPath(this.data.konbiniFolder), path);
+		return isUnderKonbiniFolder(this.data.konbiniFolder, path);
 	}
 
 	listTemplates(): Template[] {
@@ -153,6 +155,16 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		return this.templateCache.find((t) => t.name === name);
 	}
 
+	async setKonbiniFolder(folder: string): Promise<void> {
+		const next = normalizePath(folder.trim() || DEFAULT_KONBINI_FOLDER);
+		if (next === this.data.konbiniFolder) return;
+		this.data.konbiniFolder = next;
+		await this.saveData(this.data);
+		await this.ensureKonbiniLayout();
+		await this.updateSeedNote();
+		await this.refreshTemplates();
+		for (const board of this.boards) board.refresh();
+	}
 
 	/** Append a global column. No-op if the key already exists. */
 	async addColumn(def: StatusDef): Promise<void> {
@@ -316,11 +328,66 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	}
 
 	private async onVaultReady(): Promise<void> {
-		await this.ensureFolder(this.data.konbiniFolder);
-		await this.ensureFolder(templatesFolderPath(this.data.konbiniFolder));
-		await this.migrateDataTemplatesToNotes();
+		await this.ensureKonbiniLayout();
 		await this.updateSeedNote();
 		await this.refreshTemplates();
+	}
+
+	/** Create/migrate Konbini folder, Values seed, and Templates; repair moved folders. */
+	private async ensureKonbiniLayout(): Promise<void> {
+		await this.repairKonbiniFolderPath();
+		await this.ensureFolder(this.data.konbiniFolder);
+		await this.ensureFolder(templatesFolderPath(this.data.konbiniFolder));
+		await this.migrateLegacySeedNote();
+		await this.ensureValuesNote();
+		await this.migrateDataTemplatesToNotes();
+	}
+
+	/**
+	 * If configured Values.md is missing, find a marked values note and adopt its
+	 * parent as konbiniFolder. Never recreate while a marked note still exists.
+	 */
+	private async repairKonbiniFolderPath(): Promise<void> {
+		const valuesPath = valuesNotePath(this.data.konbiniFolder);
+		if (this.app.vault.getAbstractFileByPath(valuesPath) instanceof TFile) return;
+
+		const found = this.findValuesNote();
+		if (found?.parent) {
+			const repaired = found.parent.path === "/" ? "" : found.parent.path;
+			const next = normalizePath(repaired || DEFAULT_KONBINI_FOLDER);
+			if (next !== this.data.konbiniFolder) {
+				this.data.konbiniFolder = next;
+				await this.saveData(this.data);
+			}
+		}
+	}
+
+	private findValuesNote(): TFile | null {
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+			if (fm?.[KONBINI_ROLE_PROP] === KONBINI_ROLE_VALUES) return file;
+		}
+		return null;
+	}
+
+	private async migrateLegacySeedNote(): Promise<void> {
+		const legacy = this.app.vault.getAbstractFileByPath(normalizePath(LEGACY_SEED_NOTE_PATH));
+		const dest = valuesNotePath(this.data.konbiniFolder);
+		if (!(legacy instanceof TFile)) return;
+		if (this.app.vault.getAbstractFileByPath(dest)) return;
+		await this.ensureFolder(this.data.konbiniFolder);
+		await this.app.fileManager.renameFile(legacy, dest);
+	}
+
+	private async ensureValuesNote(): Promise<void> {
+		const path = valuesNotePath(this.data.konbiniFolder);
+		if (this.app.vault.getAbstractFileByPath(path) instanceof TFile) return;
+		// Prefer adopting an existing marked note over creating a duplicate.
+		if (this.findValuesNote()) return;
+		await this.app.vault.create(
+			path,
+			"Maintained by Konbini Kanban to seed property suggestions.\n"
+		);
 	}
 
 	private async migrateDataTemplatesToNotes(): Promise<void> {
@@ -386,9 +453,10 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		];
 		const labels = this.data.customLabels.map((l) => l.name);
 
-		const path = normalizePath(SEED_NOTE_PATH);
+		const path = valuesNotePath(this.data.konbiniFolder);
 		let file = this.app.vault.getAbstractFileByPath(path);
 		if (!file) {
+			await this.ensureFolder(this.data.konbiniFolder);
 			file = await this.app.vault.create(
 				path,
 				"Maintained by Konbini Kanban to seed property suggestions.\n"
@@ -396,6 +464,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		}
 		if (file instanceof TFile) {
 			await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+				fm[KONBINI_ROLE_PROP] = KONBINI_ROLE_VALUES;
 				fm[DEFAULTS.statusProp] = statuses;
 				fm[DEFAULTS.priorityProp] = priorities;
 				fm[DEFAULTS.labelsProp] = labels;
@@ -403,7 +472,6 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		}
 	}
 }
-
 
 /** One-line preview of a template body for the settings list. */
 function templatePreview(body: string): string {
@@ -628,6 +696,21 @@ class KonbiniSettingTab extends PluginSettingTab {
 					.onChange((value) => void this.plugin.setPixelArt(value))
 			);
 
+		new Setting(containerEl)
+			.setName("Konbini folder")
+			.setDesc(
+				"Vault folder for the Values seed note and task templates. Nested paths are fine (e.g. Projects/Konbini)."
+			)
+			.addText((text) => {
+				let pending = this.plugin.data.konbiniFolder;
+				text.setPlaceholder(DEFAULT_KONBINI_FOLDER).setValue(pending);
+				text.onChange((value) => {
+					pending = value;
+				});
+				text.inputEl.addEventListener("blur", () => {
+					void this.plugin.setKonbiniFolder(pending).then(() => this.display());
+				});
+			});
 
 		// Global columns — default for views without a per-board statuses override.
 		new Setting(containerEl)
