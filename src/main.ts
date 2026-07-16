@@ -30,6 +30,7 @@ import {
 import { viewOptions, mergeStatuses } from "./config";
 import { KanbanBasesView, KanbanBoard } from "./view";
 import { ConfirmModal } from "./modal-confirm";
+import { CreateTaskModal } from "./modal-create";
 import {
 	isUnderKonbiniFolder,
 	parseTemplateFile,
@@ -118,6 +119,10 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => void this.onVaultReady());
 
 		this.addSettingTab(new KonbiniSettingTab(this.app, this));
+
+		this.registerObsidianProtocolHandler("konbini", (params) => {
+			this.handleKonbiniUri(params);
+		});
 
 		// registerBasesView returns false when Bases is not enabled in the vault.
 		// Older Obsidian versions lack the method entirely, so guard for it.
@@ -432,6 +437,30 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		}
 	}
 
+	private handleKonbiniUri(params: Record<string, string>): void {
+		const folder = (params.folder ?? "").trim();
+		if (!folder) {
+			new Notice("Konbini Kanban: URI requires a folder parameter.");
+			return;
+		}
+		const board = [...this.boards][0];
+		if (!board) {
+			new Notice("Konbini Kanban: open a Kanban view first to create tasks via link.");
+			return;
+		}
+		const modal = new CreateTaskModal(board, {
+			status: board.cfg.defaultStatus,
+			parent: null,
+			folder,
+		});
+		const templateName = (params.template ?? "").trim();
+		if (templateName) modal.applyTemplateByName(templateName);
+		const statusOverride = (params.status ?? "").trim();
+		if (statusOverride) modal.setStatusPrefill(statusOverride);
+		const priority = (params.priority ?? "").trim();
+		if (priority) modal.setPriorityPrefill(priority);
+		modal.open();
+	}
 
 	/** Save data and refresh the typeahead seed note. */
 	private async persist(): Promise<void> {

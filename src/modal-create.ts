@@ -222,6 +222,34 @@ export class CreateTaskModal extends Modal {
 		window.setTimeout(() => titleInput.focus(), 20);
 	}
 
+	/**
+	 * Apply a named template into modal state (safe before or after onOpen).
+	 * Used by the Template pill and by `obsidian://konbini` deep links.
+	 */
+	applyTemplateByName(name: string): void {
+		const tpl = this.board.plugin.getTemplate(name);
+		if (!tpl) {
+			new Notice(`Konbini Kanban: template "${name}" not found.`);
+			return;
+		}
+		if (this.descInput) {
+			this.applyTemplate(name);
+			return;
+		}
+		this.description = tpl.body;
+		if (tpl.status) this.status = tpl.status;
+		if (tpl.priority) this.priority = tpl.priority;
+		if (tpl.labels?.length) this.labels = [...tpl.labels];
+		this.template = name;
+	}
+
+	setStatusPrefill(status: string): void {
+		this.status = status;
+	}
+
+	setPriorityPrefill(priority: string): void {
+		this.priority = priority;
+	}
 
 	/**
 	 * Apply a template by name, prompting the user to confirm if they've already
