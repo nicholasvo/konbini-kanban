@@ -38,6 +38,7 @@ import { ConfirmModal, confirmAction } from "./modal-confirm";
 import { CreateTaskModal } from "./modal-create";
 import { countNotesWithLabel, rewriteLabelsInVault } from "./data";
 import {
+	isKonbiniManagedPath as pathIsKonbiniManaged,
 	isUnderKonbiniFolder,
 	parseTemplateFile,
 	serializeTemplate,
@@ -160,9 +161,9 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		}
 	}
 
-	/** True if a path is inside the configured Konbini folder (seed + templates). */
+	/** True if a path is Values.md or under Templates/ (not other notes in the folder). */
 	isKonbiniManagedPath(path: string): boolean {
-		return isUnderKonbiniFolder(this.data.konbiniFolder, path);
+		return pathIsKonbiniManaged(this.data.konbiniFolder, path);
 	}
 
 	listTemplates(): Template[] {
@@ -173,12 +174,51 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		return this.templateCache.find((t) => t.name === name);
 	}
 
+	/**
+	 * Point Konbini at an existing vault folder and move Values.md + Templates/
+	 * there from the previous path. Does not create a new top-level folder.
+	 */
 	async setKonbiniFolder(folder: string): Promise<void> {
 		const next = this.normalizeKonbiniFolderPath(folder);
 		if (next === this.data.konbiniFolder) return;
+
+		const target = this.app.vault.getAbstractFileByPath(next);
+		if (!(target instanceof TFolder)) {
+			new Notice("Konbini Kanban: pick an existing folder in the vault.");
+			return;
+		}
+
+		const previous = this.data.konbiniFolder;
 		this.data.konbiniFolder = next;
 		await this.saveData(this.data);
-		await this.ensureKonbiniLayout();
+
+		// Don't run repairKonbiniFolderPath here — it would see the old Values.md
+		// still under `previous` and snap the setting back before we move.
+		await this.ensureFolder(templatesFolderPath(next));
+
+		const prevValues = this.app.vault.getAbstractFileByPath(valuesNotePath(previous));
+		const nextValuesPath = valuesNotePath(next);
+		if (
+			prevValues instanceof TFile &&
+			!(this.app.vault.getAbstractFileByPath(nextValuesPath) instanceof TFile)
+		) {
+			await this.app.fileManager.renameFile(prevValues, nextValuesPath);
+		}
+
+		const prevTemplates = this.app.vault.getAbstractFileByPath(
+			templatesFolderPath(previous)
+		);
+		const nextTemplatesPath = templatesFolderPath(next);
+		if (
+			prevTemplates instanceof TFolder &&
+			!this.app.vault.getAbstractFileByPath(nextTemplatesPath)
+		) {
+			await this.app.fileManager.renameFile(prevTemplates, nextTemplatesPath);
+		}
+
+		await this.migrateLegacySeedNote();
+		await this.ensureValuesNote();
+		await this.migrateDataTemplatesToNotes();
 		await this.updateSeedNote();
 		await this.refreshTemplates();
 		for (const board of this.boards) board.refresh();
@@ -493,12 +533,19 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	}
 
 	/**
-	 * If configured Values.md is missing, find a marked values note and adopt its
-	 * parent as konbiniFolder. Never recreate while a marked note still exists.
+	 * If the configured folder was moved in the file explorer (path gone) and a
+	 * marked Values note still exists elsewhere, adopt its parent as konbiniFolder.
+	 * Does not override Settings when the configured folder still exists — that
+	 * path may be intentional and empty of Values.md yet.
 	 */
 	private async repairKonbiniFolderPath(): Promise<void> {
 		const valuesPath = valuesNotePath(this.data.konbiniFolder);
 		if (this.app.vault.getAbstractFileByPath(valuesPath) instanceof TFile) return;
+
+		const configured = this.app.vault.getAbstractFileByPath(
+			normalizePath(this.data.konbiniFolder)
+		);
+		if (configured instanceof TFolder) return;
 
 		const found = this.findValuesNote();
 		if (found?.parent) {
@@ -864,18 +911,27 @@ class LabelEditModal extends Modal {
 	}
 }
 
-/** Inline folder search for the Konbini folder path setting. */
+/** Inline folder search for the Konbini folder path setting (existing folders only). */
 class FolderSuggest extends AbstractInputSuggest<TFolder> {
 	private onChoose: (folder: TFolder) => void;
+	private excludePath: string;
 
-	constructor(app: App, inputEl: HTMLInputElement, onChoose: (folder: TFolder) => void) {
+	constructor(
+		app: App,
+		inputEl: HTMLInputElement,
+		onChoose: (folder: TFolder) => void,
+		excludePath = ""
+	) {
 		super(app, inputEl);
 		this.onChoose = onChoose;
+		this.excludePath = normalizePath(excludePath);
 	}
 
 	protected getSuggestions(query: string): TFolder[] {
 		const q = query.toLowerCase().trim();
-		const folders = this.app.vault.getAllFolders(/* includeRoot */ false);
+		const folders = this.app.vault
+			.getAllFolders(/* includeRoot */ false)
+			.filter((f) => normalizePath(f.path) !== this.excludePath);
 		if (!q) return folders;
 		return folders.filter((f) => f.path.toLowerCase().includes(q));
 	}
@@ -885,7 +941,6 @@ class FolderSuggest extends AbstractInputSuggest<TFolder> {
 	}
 
 	selectSuggestion(folder: TFolder): void {
-		this.setValue(folder.path);
 		this.close();
 		this.onChoose(folder);
 	}
@@ -1066,6 +1121,31 @@ class KonbiniSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	private async onKonbiniFolderPicked(
+		folder: TFolder,
+		text: { setValue: (v: string) => void }
+	): Promise<void> {
+		const current = this.plugin.data.konbiniFolder;
+		const next = normalizePath(folder.path);
+		if (next === normalizePath(current)) {
+			text.setValue(current);
+			return;
+		}
+
+		const ok = await confirmAction(
+			this.app,
+			`Move Konbini data (Values.md and Templates/) into “${next}”? The folder path setting will update to that location.`,
+			"Move"
+		);
+		if (!ok) {
+			text.setValue(current);
+			return;
+		}
+
+		await this.plugin.setKonbiniFolder(next);
+		this.display();
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -1082,17 +1162,21 @@ class KonbiniSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Konbini folder path")
 			.setDesc(
-				"Folder that contains Values.md and Templates/. Prefills to the Konbini folder we create; search to pick a different folder if you move it."
+				"Search and pick an existing vault folder. Konbini moves Values.md and Templates/ into that folder. Other notes there (including tasks) stay on the board."
 			)
 			.addText((text) => {
-				text.setPlaceholder("Konbini").setValue(this.plugin.data.konbiniFolder);
-				const apply = (raw: string) =>
-					void this.plugin.setKonbiniFolder(raw).then(() => this.display());
-				new FolderSuggest(this.app, text.inputEl, (folder) => {
-					text.setValue(folder.path);
-					apply(folder.path);
+				text.setPlaceholder("Search folders…").setValue(this.plugin.data.konbiniFolder);
+				const current = this.plugin.data.konbiniFolder;
+				new FolderSuggest(
+					this.app,
+					text.inputEl,
+					(folder) => void this.onKonbiniFolderPicked(folder, text),
+					current
+				);
+				// Typing alone does not change the path — only a suggestion pick does.
+				text.inputEl.addEventListener("blur", () => {
+					text.setValue(this.plugin.data.konbiniFolder);
 				});
-				text.inputEl.addEventListener("blur", () => apply(text.getValue()));
 			});
 
 		// Global columns — default for views without a per-board statuses override.

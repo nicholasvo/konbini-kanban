@@ -32,6 +32,18 @@ export function isUnderKonbiniFolder(konbiniFolder: string, path: string): boole
 }
 
 /**
+ * True if `path` is plugin-owned and must not appear as a board task:
+ * Values.md or anything under Templates/. Other notes in the Konbini folder
+ * (e.g. user tasks) are normal vault notes and stay visible on boards.
+ */
+export function isKonbiniManagedPath(konbiniFolder: string, path: string): boolean {
+	const p = normalizePath(path);
+	if (p === valuesNotePath(konbiniFolder)) return true;
+	const templates = templatesFolderPath(konbiniFolder);
+	return p === templates || p.startsWith(`${templates}/`);
+}
+
+/**
  * Parse a markdown file's YAML frontmatter block directly from its raw
  * contents. Used instead of `metadataCache` so freshly written template notes
  * reflect their prefill values immediately, before the cache catches up.
