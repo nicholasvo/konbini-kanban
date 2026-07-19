@@ -91,7 +91,7 @@ export function parseFrontmatter(content: string): Record<string, unknown> | und
 	const end = content.indexOf("\n---", 3);
 	if (end < 0) return undefined;
 	try {
-		const parsed = parseYaml(content.slice(3, end));
+		const parsed: unknown = parseYaml(content.slice(3, end));
 		return parsed && typeof parsed === "object"
 			? (parsed as Record<string, unknown>)
 			: undefined;
@@ -159,9 +159,12 @@ export function parseTemplateFile(
 	const fm = frontmatter ?? parseFrontmatter(content) ?? {};
 	const idRaw = fm[KONBINI_TEMPLATE_ID_PROP];
 	const id = typeof idRaw === "string" ? idRaw.trim() : "";
-	const status = typeof fm[DEFAULTS.statusProp] === "string" ? String(fm[DEFAULTS.statusProp]).trim() : "";
+	const status =
+		typeof fm[DEFAULTS.statusProp] === "string" ? String(fm[DEFAULTS.statusProp]).trim() : "";
 	const priority =
-		typeof fm[DEFAULTS.priorityProp] === "string" ? String(fm[DEFAULTS.priorityProp]).trim() : "";
+		typeof fm[DEFAULTS.priorityProp] === "string"
+			? String(fm[DEFAULTS.priorityProp]).trim()
+			: "";
 	const labels = asStringArray(fm[DEFAULTS.labelsProp]);
 	return {
 		name: file.basename,

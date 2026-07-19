@@ -70,8 +70,7 @@ export class QuickAddLinkModal extends Modal {
 
 		new Setting(contentEl).addButton((btn) => {
 			this.insertBtn = btn;
-			btn
-				.setButtonText("Insert")
+			btn.setButtonText("Insert")
 				.setClass("bk-quick-add-insert")
 				.setDisabled(true)
 				.onClick(() => this.submit());
@@ -129,12 +128,8 @@ export class QuickAddLinkModal extends Modal {
 			items.push(`Status: ${label}`);
 		}
 		if (tpl.priority) {
-			const priorities = [
-				...DEFAULT_PRIORITIES,
-				...this.plugin.data.customPriorities,
-			];
-			const label =
-				priorities.find((p) => p.key === tpl.priority)?.label ?? tpl.priority;
+			const priorities = [...DEFAULT_PRIORITIES, ...this.plugin.data.customPriorities];
+			const label = priorities.find((p) => p.key === tpl.priority)?.label ?? tpl.priority;
 			items.push(`Priority: ${label}`);
 		}
 		if (tpl.labels?.length) {

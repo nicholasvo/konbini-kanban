@@ -1,11 +1,6 @@
 import type { App } from "obsidian";
 import { resolveConfig, type KanbanConfig } from "./config";
-import {
-	STATUS_COLOR_PALETTE,
-	type LabelDef,
-	type PriorityDef,
-	type StatusDef,
-} from "./constants";
+import { STATUS_COLOR_PALETTE, type LabelDef, type PriorityDef, type StatusDef } from "./constants";
 import type KonbiniKanbanPlugin from "./main";
 import { confirmAction } from "./modal-confirm";
 import type { TaskContext } from "./task-context";

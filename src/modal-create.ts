@@ -19,7 +19,6 @@ function fmtDate(iso: string): string {
 	return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, DATE_FMT);
 }
 
-
 interface CreateOptions {
 	status: string;
 	parent: TFile | null;

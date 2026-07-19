@@ -714,23 +714,23 @@ body.bk-dragging {
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.bk-popover-search input {
+.bk-popover .bk-popover-search input {
 	width: 100%;
 	padding: 4px 6px;
 	font-size: var(--font-ui-small);
 	color: var(--text-normal);
 	background: transparent;
-	border: none !important;
+	border: none;
 	border-radius: 0;
-	box-shadow: none !important;
+	box-shadow: none;
 }
 
-.bk-popover-search input:focus,
-.bk-popover-search input:focus-visible,
-.bk-popover-search input:active {
+.bk-popover .bk-popover-search input:focus,
+.bk-popover .bk-popover-search input:focus-visible,
+.bk-popover .bk-popover-search input:active {
 	outline: none;
-	border: none !important;
-	box-shadow: none !important;
+	border: none;
+	box-shadow: none;
 }
 
 .bk-popover-list {

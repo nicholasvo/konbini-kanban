@@ -154,8 +154,8 @@ function openOptionDrawer(
 
 	backdrop.onclick = close;
 	// Two frames so the browser paints the off-screen state before transitioning.
-	activeWindow.requestAnimationFrame(() =>
-		activeWindow.requestAnimationFrame(() => root.addClass("is-open"))
+	window.requestAnimationFrame(() =>
+		window.requestAnimationFrame(() => root.addClass("is-open"))
 	);
 }
 

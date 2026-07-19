@@ -1,13 +1,4 @@
-import {
-	App,
-	TFile,
-	TFolder,
-	Keymap,
-	Menu,
-	setIcon,
-	BasesView,
-	normalizePath,
-} from "obsidian";
+import { App, TFile, TFolder, Keymap, Menu, setIcon, BasesView, normalizePath } from "obsidian";
 import type { QueryController } from "obsidian";
 import {
 	KANBAN_VIEW_TYPE,
@@ -16,11 +7,7 @@ import {
 	LabelDef,
 	STATUS_COLOR_PALETTE,
 } from "./constants";
-import {
-	KanbanConfig,
-	resolveConfig,
-	serializeStringList,
-} from "./config";
+import { KanbanConfig, resolveConfig, serializeStringList } from "./config";
 import type KonbiniKanbanPlugin from "./main";
 import { Task, readTask, setStatus, collectLabels } from "./data";
 import { renderCard } from "./card";
@@ -461,10 +448,7 @@ export class KanbanBoard implements TaskContext {
 		let bodyEl: HTMLElement | null = null;
 
 		const persist = () => {
-			this.writeViewConfig(
-				"filterLabels",
-				serializeStringList([...selected])
-			);
+			this.writeViewConfig("filterLabels", serializeStringList([...selected]));
 		};
 
 		const refill = () => {
@@ -486,8 +470,7 @@ export class KanbanBoard implements TaskContext {
 			},
 			{
 				cls: "bk-label-filter-popover",
-				ignoreClose: (t) =>
-					t instanceof Element && !!t.closest(".bk-label-filter-btn"),
+				ignoreClose: (t) => t instanceof Element && !!t.closest(".bk-label-filter-btn"),
 				onClose: () => {
 					this.labelFilterPopover = null;
 					anchor.setAttr("aria-expanded", "false");

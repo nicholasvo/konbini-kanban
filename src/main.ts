@@ -254,7 +254,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 
 		const nextTemplates = this.app.vault.getAbstractFileByPath(nextPath);
 		if (nextTemplates instanceof TFolder && nextTemplates.children.length === 0) {
-			await this.app.vault.trash(nextTemplates, true);
+			await this.app.fileManager.trashFile(nextTemplates);
 		} else if (nextTemplates) {
 			// Destination already has files — move only missing children, then
 			// drop the empty source so we don't leave a second templates folder.
@@ -265,7 +265,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 					await this.app.fileManager.renameFile(child, destPath);
 				}
 				if (prevTemplates.children.length === 0) {
-					await this.app.vault.trash(prevTemplates, true);
+					await this.app.fileManager.trashFile(prevTemplates);
 				}
 			}
 			return;
@@ -289,7 +289,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		];
 		for (const suffix of suffixes) {
 			if (next.endsWith(`/${suffix}`)) {
-				next = next.slice(0, -(`/${suffix}`).length);
+				next = next.slice(0, -`/${suffix}`.length);
 				break;
 			}
 			if (next === suffix) {
@@ -398,11 +398,8 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		const canonical = def?.name ?? name.trim();
 		if (!canonical) return;
 
-		const result = await rewriteLabelsInVault(
-			this.app,
-			canonical,
-			null,
-			(path) => this.shouldSkipLabelSweep(path)
+		const result = await rewriteLabelsInVault(this.app, canonical, null, (path) =>
+			this.shouldSkipLabelSweep(path)
 		);
 		this.data.customLabels = this.data.customLabels.filter(
 			(l) => l.name.toLowerCase() !== canonical.toLowerCase()
@@ -436,11 +433,8 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		}
 		if (def.name === next) return true;
 
-		const result = await rewriteLabelsInVault(
-			this.app,
-			def.name,
-			next,
-			(path) => this.shouldSkipLabelSweep(path)
+		const result = await rewriteLabelsInVault(this.app, def.name, next, (path) =>
+			this.shouldSkipLabelSweep(path)
 		);
 		def.name = next;
 		await this.persist();
@@ -508,7 +502,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	async removeTemplate(name: string): Promise<void> {
 		const path = templateNotePath(this.data.konbiniFolder, name);
 		const file = this.app.vault.getAbstractFileByPath(path);
-		if (file instanceof TFile) await this.app.vault.trash(file, true);
+		if (file instanceof TFile) await this.app.fileManager.trashFile(file);
 		await this.refreshTemplates();
 	}
 
@@ -613,7 +607,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			} else {
 				// Prefixed note already exists (e.g. created while Values.md was
 				// still present) — drop the short-name leftover.
-				await this.app.vault.trash(oldValues, true);
+				await this.app.fileManager.trashFile(oldValues);
 			}
 		}
 
@@ -637,7 +631,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			await this.app.fileManager.renameFile(child, destPath);
 		}
 		if (oldTemplates.children.length === 0) {
-			await this.app.vault.trash(oldTemplates, true);
+			await this.app.fileManager.trashFile(oldTemplates);
 		}
 	}
 
@@ -693,7 +687,7 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		}
 
 		const customized = await this.mergeLegacySeedIntoValues(legacy, dest);
-		await this.app.vault.trash(legacy, true);
+		await this.app.fileManager.trashFile(legacy);
 		if (customized) {
 			new Notice(
 				"Konbini Kanban: merged your old seed note into the Konbini folder (original is in the trash)."
@@ -1139,10 +1133,7 @@ class TemplateEditModal extends Modal {
 		host.empty();
 		const selected = new Set(this.tplLabels);
 		const known = Array.from(
-			new Set([
-				...this.plugin.data.customLabels.map((l) => l.name),
-				...this.tplLabels,
-			])
+			new Set([...this.plugin.data.customLabels.map((l) => l.name), ...this.tplLabels])
 		).sort((a, b) => a.localeCompare(b));
 
 		if (known.length === 0) {
@@ -1416,7 +1407,8 @@ class KonbiniSettingTab extends PluginSettingTab {
 							const ok = await this.plugin.addCustomLabel({
 								name,
 								color: STATUS_COLOR_PALETTE[
-									this.plugin.data.customLabels.length % STATUS_COLOR_PALETTE.length
+									this.plugin.data.customLabels.length %
+										STATUS_COLOR_PALETTE.length
 								],
 							});
 							if (ok) this.display();
@@ -1516,7 +1508,7 @@ class KonbiniSettingTab extends PluginSettingTab {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			if (this.plugin.isKonbiniManagedPath(file.path)) continue;
 			const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
-			const raw = fm?.[DEFAULTS.statusProp];
+			const raw: unknown = fm?.[DEFAULTS.statusProp];
 			if (typeof raw === "string" && raw.trim().toLowerCase() === key) n++;
 		}
 		return n;

@@ -57,9 +57,7 @@ function optionalStr(reader: RawConfigReader, key: string): string {
 function parseStringList(reader: RawConfigReader, key: string): string[] {
 	const v = reader.get(key);
 	if (Array.isArray(v)) {
-		return v
-			.map((x) => String(x).trim())
-			.filter((s) => s.length > 0);
+		return v.map((x) => String(x).trim()).filter((s) => s.length > 0);
 	}
 	if (typeof v === "string" && v.trim().length > 0) {
 		return v
