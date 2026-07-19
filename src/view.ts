@@ -1,4 +1,13 @@
-import { App, TFile, TFolder, Keymap, Menu, setIcon, BasesView, normalizePath } from "obsidian";
+import {
+	App,
+	TFile,
+	TFolder,
+	Keymap,
+	Menu,
+	setIcon,
+	BasesView,
+	normalizePath,
+} from "obsidian";
 import type { QueryController } from "obsidian";
 import {
 	KANBAN_VIEW_TYPE,
@@ -7,7 +16,11 @@ import {
 	LabelDef,
 	STATUS_COLOR_PALETTE,
 } from "./constants";
-import { KanbanConfig, resolveConfig } from "./config";
+import {
+	KanbanConfig,
+	resolveConfig,
+	serializeStringList,
+} from "./config";
 import type KonbiniKanbanPlugin from "./main";
 import { Task, readTask, setStatus, collectLabels } from "./data";
 import { renderCard } from "./card";
@@ -16,6 +29,7 @@ import { EditTaskModal } from "./modal-edit";
 import { confirmAction } from "./modal-confirm";
 import { renderEmptyKonbini } from "./konbini";
 import { statusGlyph } from "./icons";
+import { mountPopover, type PopoverHandle } from "./pickers";
 import type { TaskContext } from "./task-context";
 
 export interface ChildRollup {
@@ -40,6 +54,9 @@ export class KanbanBoard implements TaskContext {
 	/** Re-runs the Bases data pipeline + repaint; wired up by the view. */
 	refresh: () => void = () => {};
 
+	/** Persist a Bases view option (wired by KanbanBasesView). */
+	writeViewConfig: (key: string, value: unknown) => void = () => {};
+
 	private rootEl: HTMLElement;
 	private columnsEl!: HTMLElement;
 	private columnBodyEls = new Map<string, HTMLElement>();
@@ -58,6 +75,8 @@ export class KanbanBoard implements TaskContext {
 	childrenByParent = new Map<string, Task[]>();
 	private collapsed = new Set<string>();
 	private targetFolder = "";
+	/** Labels filter popover (mounted on body; survives board re-renders). */
+	private labelFilterPopover: PopoverHandle | null = null;
 
 	// FLIP state: card rects captured before a move, replayed on the next render
 	// so cards spring from their old position into the new layout.
@@ -97,6 +116,7 @@ export class KanbanBoard implements TaskContext {
 
 	/** Detach the resize observer when the view unloads. */
 	dispose(): void {
+		this.labelFilterPopover?.close();
 		this.resizeObs.disconnect();
 		window.clearTimeout(this.enterTimer);
 	}
@@ -273,13 +293,22 @@ export class KanbanBoard implements TaskContext {
 		}
 	}
 
+	/** Top-level tasks, optionally narrowed by the Labels filter (OR). */
+	private topLevelTasks(): Task[] {
+		const filter = this.cfg.filterLabels;
+		const filterSet = filter.length > 0 ? new Set(filter) : null;
+		return this.tasks.filter((task) => {
+			if (task.parentPath && this.taskByPath.has(task.parentPath)) return false;
+			if (!filterSet) return true;
+			return task.labels.some((label) => filterSet.has(label));
+		});
+	}
+
 	/** Bucket tasks by status. Unknown/empty statuses fall into defaultStatus. */
 	private bucketed(): Map<string, Task[]> {
 		const map = new Map<string, Task[]>();
 		for (const s of this.cfg.statuses) map.set(s.key, []);
-		for (const task of this.tasks) {
-			// In-scope sub-tasks render nested under their parent, not as columns.
-			if (task.parentPath && this.taskByPath.has(task.parentPath)) continue;
+		for (const task of this.topLevelTasks()) {
 			let key = task.status;
 			if (!this.statusByKey.has(key)) key = this.cfg.defaultStatus;
 			if (!map.has(key)) map.set(key, []);
@@ -300,6 +329,7 @@ export class KanbanBoard implements TaskContext {
 		const enterFrom = this.enterPath ? this.captureRects() : null;
 		this.rootEl.empty();
 		this.columnBodyEls.clear();
+		this.renderToolbar();
 		this.columnsEl = this.rootEl.createDiv("bk-columns");
 		const buckets = this.bucketed();
 		const hidden = new Set(this.plugin.data.hiddenStatuses);
@@ -405,6 +435,152 @@ export class KanbanBoard implements TaskContext {
 				this.playEnter(el);
 			}
 		}
+	}
+
+	private renderToolbar(): void {
+		const bar = this.rootEl.createDiv("bk-board-toolbar");
+		const n = this.cfg.filterLabels.length;
+		const btn = bar.createEl("button", { cls: "bk-label-filter-btn" });
+		btn.setAttr("type", "button");
+		btn.setAttr("aria-expanded", this.labelFilterPopover ? "true" : "false");
+		setIcon(btn.createSpan("bk-label-filter-btn-icon"), "tags");
+		btn.createSpan({
+			text: n > 0 ? `Labels (${n})` : "Labels",
+		});
+		btn.onclick = () => {
+			if (this.labelFilterPopover) {
+				this.labelFilterPopover.close();
+				return;
+			}
+			this.openLabelFilterPopover(btn);
+		};
+	}
+
+	private openLabelFilterPopover(anchor: HTMLElement): void {
+		let selected = new Set(this.cfg.filterLabels);
+		let bodyEl: HTMLElement | null = null;
+
+		const persist = () => {
+			this.writeViewConfig(
+				"filterLabels",
+				serializeStringList([...selected])
+			);
+		};
+
+		const refill = () => {
+			if (!bodyEl) return;
+			bodyEl.empty();
+			this.buildLabelFilterPopover(bodyEl, selected, (next) => {
+				selected = next;
+				refill();
+				persist();
+			});
+		};
+
+		anchor.setAttr("aria-expanded", "true");
+		this.labelFilterPopover = mountPopover(
+			anchor,
+			(body) => {
+				bodyEl = body;
+				refill();
+			},
+			{
+				cls: "bk-label-filter-popover",
+				ignoreClose: (t) =>
+					t instanceof Element && !!t.closest(".bk-label-filter-btn"),
+				onClose: () => {
+					this.labelFilterPopover = null;
+					anchor.setAttr("aria-expanded", "false");
+				},
+			}
+		);
+	}
+
+	private buildLabelFilterPopover(
+		panel: HTMLElement,
+		selected: Set<string>,
+		onChange: (next: Set<string>) => void
+	): void {
+		panel.createDiv({
+			cls: "bk-label-filter-title",
+			text: "Filter by any selected label",
+		});
+		panel.createDiv({
+			cls: "bk-label-filter-desc",
+			text: "Labels without tasks are hidden.",
+		});
+
+		const settingsNames = this.plugin.data.customLabels.map((l) => l.name);
+		if (settingsNames.length === 0) {
+			panel.createDiv({
+				cls: "bk-label-filter-empty",
+				text: "No labels in Settings yet — add some under Konbini Kanban → Labels.",
+			});
+			return;
+		}
+
+		const counts = this.labelFilterCounts(settingsNames);
+		// Only list labels that appear on at least one top-level board task
+		// (keep currently selected labels visible so they can be unchecked).
+		const names = settingsNames.filter(
+			(name) => (counts.get(name) ?? 0) > 0 || selected.has(name)
+		);
+		if (names.length === 0) {
+			panel.createDiv({
+				cls: "bk-label-filter-empty",
+				text: "No labels in use on this board yet.",
+			});
+			return;
+		}
+
+		const list = panel.createDiv("bk-label-filter-list");
+		for (const name of names) {
+			const row = list.createEl("label", { cls: "bk-label-filter-row" });
+			row.createSpan({ cls: "bk-label-filter-row-name", text: name });
+			row.createSpan({
+				cls: "bk-label-filter-row-count",
+				text: String(counts.get(name) ?? 0),
+			});
+			const checkbox = row.createEl("input", {
+				cls: "bk-label-filter-checkbox",
+				attr: { type: "checkbox" },
+			});
+			checkbox.checked = selected.has(name);
+			checkbox.onchange = () => {
+				const next = new Set(selected);
+				if (checkbox.checked) next.add(name);
+				else next.delete(name);
+				onChange(next);
+			};
+		}
+
+		const footer = panel.createDiv("bk-label-filter-footer");
+		const clear = footer.createEl("button", {
+			cls: "bk-label-filter-clear",
+			text: "Clear",
+		});
+		clear.type = "button";
+		clear.disabled = selected.size === 0;
+		clear.onclick = (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			if (selected.size === 0) return;
+			onChange(new Set());
+		};
+	}
+
+	/** Top-level tasks that carry each Settings label (a task can count on multiple). */
+	private labelFilterCounts(labels: string[]): Map<string, number> {
+		const counts = new Map<string, number>();
+		for (const name of labels) counts.set(name, 0);
+		for (const task of this.tasks) {
+			if (task.parentPath && this.taskByPath.has(task.parentPath)) continue;
+			for (const label of task.labels) {
+				if (!counts.has(label)) continue;
+				counts.set(label, (counts.get(label) ?? 0) + 1);
+			}
+		}
+		return counts;
 	}
 
 	/** Fade + settle a newly created card into place. */
@@ -596,6 +772,7 @@ export class KanbanBasesView extends BasesView {
 		const container = parentEl.createDiv("bk-view-container");
 		this.board = new KanbanBoard(this.app, container, plugin);
 		this.board.refresh = () => this.onDataUpdated();
+		this.board.writeViewConfig = (key, value) => this.config.set(key, value);
 		// Track this board so settings changes can repaint it; drop it on unload.
 		plugin.boards.add(this.board);
 		this.register(() => {
