@@ -1,7 +1,7 @@
 import { setIcon, Platform } from "obsidian";
 import { STATUS_COLOR_PALETTE } from "./constants";
 import { statusGlyph, priorityGlyph } from "./icons";
-import type { KanbanBoard } from "./view";
+import type { TaskContext } from "./task-context";
 
 /**
  * Lightweight floating popovers honoring the Codex animation guide: surfaces
@@ -142,7 +142,7 @@ function openOptionDrawer(
 
 export function statusPopover(
 	anchor: HTMLElement,
-	board: KanbanBoard,
+	board: TaskContext,
 	current: string,
 	onPick: (key: string) => void | Promise<void>
 ): void {
@@ -181,7 +181,7 @@ export function statusPopover(
 
 export function priorityPopover(
 	anchor: HTMLElement,
-	board: KanbanBoard,
+	board: TaskContext,
 	current: string,
 	onPick: (key: string) => void | Promise<void>
 ): void {
@@ -226,7 +226,7 @@ export function priorityPopover(
 
 export function labelPopover(
 	anchor: HTMLElement,
-	board: KanbanBoard,
+	board: TaskContext,
 	selected: string[],
 	onCommit: (labels: string[]) => void | Promise<void>
 ): void {
@@ -303,7 +303,7 @@ export function labelPopover(
 
 export function templatePopover(
 	anchor: HTMLElement,
-	board: KanbanBoard,
+	board: TaskContext,
 	current: string | null,
 	onPick: (name: string) => void | Promise<void>
 ): void {

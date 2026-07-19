@@ -15,6 +15,12 @@ export const KONBINI_ROLE_PROP = "konbini-role";
 export const KONBINI_ROLE_VALUES = "values";
 export const KONBINI_ROLE_TEMPLATE = "template";
 
+/** Immutable id on a template note (survives rename). */
+export const KONBINI_TEMPLATE_ID_PROP = "konbini-template-id";
+
+/** Link on a task note to the template it was created from. */
+export const KONBINI_TEMPLATE_PROP = "konbini-template";
+
 /** Seed note basename — prefixed so it won't clash with a user's own Values.md. */
 export const VALUES_NOTE_NAME = "Konbini Values.md";
 
@@ -63,6 +69,8 @@ export interface LabelDef {
 export interface Template {
 	name: string;
 	body: string;
+	/** Immutable id from `konbini-template-id`; set on create/migration. */
+	id?: string;
 	/** Optional prefill values applied when the template is selected in the create modal. */
 	status?: string;
 	priority?: string;
@@ -136,5 +144,6 @@ export const DEFAULTS = {
 	titleProp: "title",
 	startDateProp: "startDate",
 	endDateProp: "endDate",
-	defaultStatus: "todo",
+	/** Empty → resolveConfig picks the board's first column. */
+	defaultStatus: "",
 } as const;

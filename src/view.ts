@@ -1,4 +1,4 @@
-import { App, TFile, Keymap, Menu, setIcon, BasesView } from "obsidian";
+import { App, TFile, TFolder, Keymap, Menu, setIcon, BasesView, normalizePath } from "obsidian";
 import type { QueryController } from "obsidian";
 import {
 	KANBAN_VIEW_TYPE,
@@ -16,6 +16,7 @@ import { EditTaskModal } from "./modal-edit";
 import { confirmAction } from "./modal-confirm";
 import { renderEmptyKonbini } from "./konbini";
 import { statusGlyph } from "./icons";
+import type { TaskContext } from "./task-context";
 
 export interface ChildRollup {
 	done: number;
@@ -29,7 +30,7 @@ const NARROW_THRESHOLD = 600;
  * Holds everything a card needs and owns the column DOM. One board per view
  * instance; rebuilt on every onDataUpdated, but it reuses the root element.
  */
-export class KanbanBoard {
+export class KanbanBoard implements TaskContext {
 	app: App;
 	plugin: KonbiniKanbanPlugin;
 	cfg!: KanbanConfig;
@@ -613,7 +614,7 @@ export class KanbanBasesView extends BasesView {
 			}
 		);
 		const files = this.collectFiles();
-		this.board.update(cfg, files, this.inferTargetFolder(files));
+		this.board.update(cfg, files, this.resolveNewTaskFolder(cfg, files));
 	}
 
 	/** Pull the deduped TFile set from the query result. */
@@ -633,6 +634,22 @@ export class KanbanBasesView extends BasesView {
 		if (Array.isArray(data?.ungroupedData)) data.ungroupedData.forEach(pushEntry);
 		for (const g of groups) (g?.entries ?? []).forEach(pushEntry);
 		return out;
+	}
+
+	/**
+	 * Prefer the board's New task folder option when it still exists; otherwise
+	 * infer from where most board tasks already live (vault root if empty).
+	 */
+	private resolveNewTaskFolder(cfg: KanbanConfig, files: TFile[]): string {
+		const configured = cfg.newTaskFolder.trim();
+		if (configured) {
+			const path = normalizePath(configured);
+			if (path && path !== ".") {
+				const folder = this.app.vault.getAbstractFileByPath(path);
+				if (folder instanceof TFolder) return path;
+			}
+		}
+		return this.inferTargetFolder(files);
 	}
 
 	/** New tasks go in the folder most tasks already live in, else vault root. */

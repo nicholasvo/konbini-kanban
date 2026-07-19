@@ -9,7 +9,6 @@ import {
 	TFolder,
 	normalizePath,
 	setIcon,
-	AbstractInputSuggest,
 	type BasesViewRegistration,
 } from "obsidian";
 import {
@@ -27,19 +26,23 @@ import {
 	LEGACY_SEED_NOTE_BASENAME,
 	KONBINI_ROLE_PROP,
 	KONBINI_ROLE_VALUES,
-	VALUES_NOTE_NAME,
-	TEMPLATES_SUBFOLDER,
 	LEGACY_VALUES_NOTE_NAME,
 	LEGACY_TEMPLATES_SUBFOLDER,
 	STATUS_COLOR_PALETTE,
 	buildColumnKey,
+	VALUES_NOTE_NAME,
+	TEMPLATES_SUBFOLDER,
 } from "./constants";
 import { viewOptions, mergeStatuses } from "./config";
 import { KanbanBasesView, KanbanBoard } from "./view";
 import { ConfirmModal, confirmAction } from "./modal-confirm";
 import { CreateTaskModal } from "./modal-create";
-import { countNotesWithLabel, rewriteLabelsInVault } from "./data";
+import { QuickAddLinkModal } from "./modal-quick-add-link";
+import { countNotesWithLabel, ensureVaultFolder, rewriteLabelsInVault } from "./data";
+import { QuickAddContext } from "./quick-add-context";
+import { FolderSuggest } from "./suggest";
 import {
+	generateTemplateId,
 	isKonbiniManagedPath as pathIsKonbiniManaged,
 	isUnderKonbiniFolder,
 	legacyTemplatesFolderPath,
@@ -47,6 +50,7 @@ import {
 	parseTemplateFile,
 	serializeTemplate,
 	stripFrontmatter,
+	templateFieldsChanged,
 	templateNotePath,
 	templatesFolderPath,
 	valuesNotePath,
@@ -138,6 +142,14 @@ export default class KonbiniKanbanPlugin extends Plugin {
 
 		this.addSettingTab(new KonbiniSettingTab(this.app, this));
 
+		this.addCommand({
+			id: "insert-quick-add-link",
+			name: "Insert quick-add link",
+			editorCallback: (editor) => {
+				new QuickAddLinkModal(this, (md) => editor.replaceSelection(md)).open();
+			},
+		});
+
 		this.registerObsidianProtocolHandler("konbini", (params) => {
 			this.handleKonbiniUri(params);
 		});
@@ -176,6 +188,10 @@ export default class KonbiniKanbanPlugin extends Plugin {
 
 	getTemplate(name: string): Template | undefined {
 		return this.templateCache.find((t) => t.name === name);
+	}
+
+	getTemplateById(id: string): Template | undefined {
+		return this.templateCache.find((t) => t.id === id);
 	}
 
 	/**
@@ -455,14 +471,18 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	 */
 	async saveTemplate(template: Template, originalName?: string): Promise<void> {
 		await this.ensureFolder(templatesFolderPath(this.data.konbiniFolder));
-		const oldName = originalName ?? template.name;
+		const withId: Template = {
+			...template,
+			id: template.id || generateTemplateId(),
+		};
+		const oldName = originalName ?? withId.name;
 		const oldPath = templateNotePath(this.data.konbiniFolder, oldName);
-		const newPath = templateNotePath(this.data.konbiniFolder, template.name);
-		const content = serializeTemplate(template);
+		const newPath = templateNotePath(this.data.konbiniFolder, withId.name);
+		const content = serializeTemplate(withId);
 
 		let file = this.app.vault.getAbstractFileByPath(oldPath);
 		if (file instanceof TFile) {
-			if (oldName !== template.name) {
+			if (oldName !== withId.name) {
 				const clash = this.app.vault.getAbstractFileByPath(newPath);
 				if (clash) {
 					new Notice("A template with that name already exists");
@@ -471,7 +491,9 @@ export default class KonbiniKanbanPlugin extends Plugin {
 				await this.app.fileManager.renameFile(file, newPath);
 				file = this.app.vault.getAbstractFileByPath(newPath);
 			}
-			if (file instanceof TFile) await this.app.vault.modify(file, content);
+			if (file instanceof TFile) {
+				await this.app.vault.process(file, () => content);
+			}
 		} else {
 			const clash = this.app.vault.getAbstractFileByPath(newPath);
 			if (clash) {
@@ -781,7 +803,13 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			for (const child of folder.children) {
 				if (!(child instanceof TFile) || child.extension !== "md") continue;
 				const content = await this.app.vault.read(child);
-				out.push(parseTemplateFile(child, content));
+				let tpl = parseTemplateFile(child, content);
+				if (!tpl.id) {
+					const id = generateTemplateId();
+					tpl = { ...tpl, id };
+					await this.app.vault.process(child, () => serializeTemplate(tpl));
+				}
+				out.push(tpl);
 			}
 		}
 		out.sort((a, b) => a.name.localeCompare(b.name));
@@ -789,32 +817,40 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	}
 
 	private async ensureFolder(path: string): Promise<void> {
-		const norm = normalizePath(path);
-		if (!norm || norm === "." || norm === "/") return;
-		if (this.app.vault.getAbstractFileByPath(norm)) return;
-		const parts = norm.split("/").filter(Boolean);
-		let cur = "";
-		for (const part of parts) {
-			cur = cur ? `${cur}/${part}` : part;
-			if (!this.app.vault.getAbstractFileByPath(cur)) {
-				await this.app.vault.createFolder(cur);
+		await ensureVaultFolder(this.app, path);
+	}
+
+	/**
+	 * Normalize URI folder param. Older quick-add links used URLSearchParams,
+	 * which encodes spaces as "+" — if that path doesn't exist but the
+	 * space-separated path does, prefer the real folder.
+	 */
+	private resolveUriFolder(raw: string): string {
+		const folder = normalizePath(raw);
+		if (!folder || folder === ".") return folder;
+		if (this.app.vault.getAbstractFileByPath(folder) instanceof TFolder) {
+			return folder;
+		}
+		if (folder.includes("+")) {
+			const spaced = normalizePath(folder.replace(/\+/g, " "));
+			if (this.app.vault.getAbstractFileByPath(spaced) instanceof TFolder) {
+				return spaced;
 			}
 		}
+		return folder;
 	}
 
 	private handleKonbiniUri(params: Record<string, string>): void {
-		const folder = (params.folder ?? "").trim();
-		if (!folder) {
+		const folder = this.resolveUriFolder((params.folder ?? "").trim());
+		if (!folder || folder === ".") {
 			new Notice("Konbini Kanban: URI requires a folder parameter.");
 			return;
 		}
-		const board = [...this.boards][0];
-		if (!board) {
-			new Notice("Konbini Kanban: open a Kanban view first to create tasks via link.");
-			return;
-		}
-		const modal = new CreateTaskModal(board, {
-			status: board.cfg.defaultStatus,
+		// Always boardless: destination is the link's folder; config from plugin
+		// Settings. Avoids depending on which Kanban leaf is open in a split.
+		const ctx = new QuickAddContext(this);
+		const modal = new CreateTaskModal(ctx, {
+			status: ctx.cfg.defaultStatus,
 			parent: null,
 			folder,
 		});
@@ -998,41 +1034,6 @@ class LabelEditModal extends Modal {
 	}
 }
 
-/** Inline folder search for the Konbini folder path setting (existing folders only). */
-class FolderSuggest extends AbstractInputSuggest<TFolder> {
-	private onChoose: (folder: TFolder) => void;
-	private excludePath: string;
-
-	constructor(
-		app: App,
-		inputEl: HTMLInputElement,
-		onChoose: (folder: TFolder) => void,
-		excludePath = ""
-	) {
-		super(app, inputEl);
-		this.onChoose = onChoose;
-		this.excludePath = normalizePath(excludePath);
-	}
-
-	protected getSuggestions(query: string): TFolder[] {
-		const q = query.toLowerCase().trim();
-		const folders = this.app.vault
-			.getAllFolders(/* includeRoot */ false)
-			.filter((f) => normalizePath(f.path) !== this.excludePath);
-		if (!q) return folders;
-		return folders.filter((f) => f.path.toLowerCase().includes(q));
-	}
-
-	renderSuggestion(folder: TFolder, el: HTMLElement): void {
-		el.setText(folder.path);
-	}
-
-	selectSuggestion(folder: TFolder): void {
-		this.close();
-		this.onChoose(folder);
-	}
-}
-
 /** Modal for creating or editing a description-body template. */
 class TemplateEditModal extends Modal {
 	private plugin: KonbiniKanbanPlugin;
@@ -1089,7 +1090,7 @@ class TemplateEditModal extends Modal {
 		new Setting(contentEl)
 			.setName("Prefill values")
 			.setDesc(
-				"Copied into a new task when this template is applied. Editing a template does not update tasks already created from it."
+				"Copied into a new task when this template is applied. Saving changes only affects notes created after you save."
 			)
 			.setHeading();
 
@@ -1185,13 +1186,23 @@ class TemplateEditModal extends Modal {
 			new Notice("A template with that name already exists");
 			return;
 		}
-		await this.onSubmit({
+		const next: Template = {
 			name,
 			body: this.body,
+			id: this.original?.id || generateTemplateId(),
 			status: this.tplStatus || undefined,
 			priority: this.tplPriority || undefined,
 			labels: this.tplLabels.length > 0 ? [...this.tplLabels] : undefined,
-		});
+		};
+		if (this.original && templateFieldsChanged(this.original, next)) {
+			const ok = await confirmAction(
+				this.app,
+				"These template changes only affect new notes created from this template. Existing notes are not updated.",
+				"Save"
+			);
+			if (!ok) return;
+		}
+		await this.onSubmit(next);
 		this.close();
 	}
 
