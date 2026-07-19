@@ -1690,6 +1690,15 @@ body.bk-dragging {
 	margin: 0.15em 0;
 }
 
+.bk-quick-add-insert:disabled,
+.bk-quick-add-insert[disabled] {
+	opacity: 0.45;
+	cursor: not-allowed;
+	color: var(--text-faint);
+	background-color: var(--background-modifier-border);
+	box-shadow: none;
+}
+
 /* ---- Edit sheet (mobile-first task editor) ---------------- */
 
 /* "Open note" sits on the left; Save keeps its place on the right. */

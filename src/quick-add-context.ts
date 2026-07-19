@@ -11,8 +11,8 @@ import { confirmAction } from "./modal-confirm";
 import type { TaskContext } from "./task-context";
 
 /**
- * Boardless TaskContext for `obsidian://konbini` when no Kanban view is open.
- * Uses plugin Settings defaults (not per-board view options).
+ * Boardless TaskContext for `obsidian://konbini` quick-add links.
+ * Destination comes from the URI; config from plugin Settings (not an open board).
  */
 export class QuickAddContext implements TaskContext {
 	app: App;

@@ -1,4 +1,4 @@
-import { Modal, Notice, Setting, normalizePath } from "obsidian";
+import { ButtonComponent, Modal, Setting, normalizePath } from "obsidian";
 import type KonbiniKanbanPlugin from "./main";
 import { DEFAULT_PRIORITIES, type Template } from "./constants";
 import { FolderSuggest } from "./suggest";
@@ -11,9 +11,10 @@ export class QuickAddLinkModal extends Modal {
 	private plugin: KonbiniKanbanPlugin;
 	private onInsert: (markdown: string) => void;
 	private folder = "";
-	private linkText = "Quick add task";
+	private linkText = "";
 	private templateName = "";
 	private templatePreviewEl!: HTMLElement;
+	private insertBtn!: ButtonComponent;
 
 	constructor(plugin: KonbiniKanbanPlugin, onInsert: (markdown: string) => void) {
 		super(plugin.app);
@@ -30,15 +31,23 @@ export class QuickAddLinkModal extends Modal {
 			.setDesc("Vault folder where new tasks from this link will be created.")
 			.addText((text) => {
 				text.setPlaceholder("Search folders…").setValue(this.folder);
+				text.onChange((v) => {
+					this.folder = v;
+					this.syncInsertEnabled();
+				});
 				new FolderSuggest(this.app, text.inputEl, (folder) => {
 					this.folder = folder.path;
 					text.setValue(folder.path);
+					this.syncInsertEnabled();
 				});
 			});
 
 		new Setting(contentEl).setName("Link text").addText((text) => {
-			text.setPlaceholder("Quick add task").setValue(this.linkText);
-			text.onChange((v) => (this.linkText = v));
+			text.setPlaceholder("Add task").setValue(this.linkText);
+			text.onChange((v) => {
+				this.linkText = v;
+				this.syncInsertEnabled();
+			});
 		});
 
 		new Setting(contentEl)
@@ -59,12 +68,27 @@ export class QuickAddLinkModal extends Modal {
 		this.templatePreviewEl = contentEl.createDiv("bk-quick-add-template-preview");
 		this.renderTemplatePreview();
 
-		new Setting(contentEl).addButton((btn) =>
+		new Setting(contentEl).addButton((btn) => {
+			this.insertBtn = btn;
 			btn
 				.setButtonText("Insert")
-				.setCta()
-				.onClick(() => this.submit())
-		);
+				.setClass("bk-quick-add-insert")
+				.setDisabled(true)
+				.onClick(() => this.submit());
+		});
+		this.syncInsertEnabled();
+	}
+
+	private canSubmit(): boolean {
+		const folder = normalizePath(this.folder.trim());
+		return folder.length > 0 && folder !== "." && this.linkText.trim().length > 0;
+	}
+
+	private syncInsertEnabled(): void {
+		const ok = this.canSubmit();
+		this.insertBtn?.setDisabled(!ok);
+		if (ok) this.insertBtn?.setCta();
+		else this.insertBtn?.removeCta();
 	}
 
 	/** Bullet list of prefill fields the selected template will apply. */
@@ -120,16 +144,9 @@ export class QuickAddLinkModal extends Modal {
 	}
 
 	private submit(): void {
+		if (!this.canSubmit()) return;
 		const folder = normalizePath(this.folder.trim());
 		const text = this.linkText.trim();
-		if (!folder || folder === ".") {
-			new Notice("Pick a destination folder");
-			return;
-		}
-		if (text.length === 0) {
-			new Notice("Link text is required");
-			return;
-		}
 
 		// Use encodeURIComponent (spaces → %20). URLSearchParams uses +, which
 		// Obsidian's protocol handler can treat as a literal "+" in the folder path.

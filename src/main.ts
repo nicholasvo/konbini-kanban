@@ -846,8 +846,9 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			new Notice("Konbini Kanban: URI requires a folder parameter.");
 			return;
 		}
-		const board = [...this.boards][0];
-		const ctx = board ?? new QuickAddContext(this);
+		// Always boardless: destination is the link's folder; config from plugin
+		// Settings. Avoids depending on which Kanban leaf is open in a split.
+		const ctx = new QuickAddContext(this);
 		const modal = new CreateTaskModal(ctx, {
 			status: ctx.cfg.defaultStatus,
 			parent: null,
