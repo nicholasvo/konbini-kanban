@@ -620,28 +620,23 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	}
 
 	/**
-	 * If the configured folder was moved in the file explorer (path gone) and a
-	 * marked Values note still exists elsewhere, adopt its parent as konbiniFolder.
-	 * Does not override Settings when the configured folder still exists — that
-	 * path may be intentional and empty of the Values note yet.
+	 * If the Values note is missing at the configured path but a marked
+	 * `konbini-role: values` note exists elsewhere (folder renamed/moved in the
+	 * file explorer, or Values+Templates dragged out), adopt its parent as
+	 * konbiniFolder so we don't recreate duplicates at the old path.
 	 */
 	private async repairKonbiniFolderPath(): Promise<void> {
 		const valuesPath = valuesNotePath(this.data.konbiniFolder);
 		if (this.app.vault.getAbstractFileByPath(valuesPath) instanceof TFile) return;
 
-		const configured = this.app.vault.getAbstractFileByPath(
-			normalizePath(this.data.konbiniFolder)
-		);
-		if (configured instanceof TFolder) return;
-
 		const found = this.findValuesNote();
-		if (found?.parent) {
-			const repaired = found.parent.path === "/" ? "" : found.parent.path;
-			const next = normalizePath(repaired || DEFAULT_KONBINI_FOLDER);
-			if (next !== this.data.konbiniFolder) {
-				this.data.konbiniFolder = next;
-				await this.saveData(this.data);
-			}
+		if (!found?.parent) return;
+
+		const repaired = found.parent.path === "/" ? "" : found.parent.path;
+		const next = normalizePath(repaired || DEFAULT_KONBINI_FOLDER);
+		if (next !== this.data.konbiniFolder) {
+			this.data.konbiniFolder = next;
+			await this.saveData(this.data);
 		}
 	}
 
@@ -854,7 +849,11 @@ export default class KonbiniKanbanPlugin extends Plugin {
 
 		const path = valuesNotePath(this.data.konbiniFolder);
 		let file = this.app.vault.getAbstractFileByPath(path);
-		if (!file) {
+		if (!(file instanceof TFile)) {
+			// Don't create a second seed note if the marked one was moved.
+			file = this.findValuesNote();
+		}
+		if (!(file instanceof TFile)) {
 			await this.ensureFolder(this.data.konbiniFolder);
 			file = await this.app.vault.create(
 				path,
