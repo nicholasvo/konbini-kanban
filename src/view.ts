@@ -1,4 +1,4 @@
-import { App, TFile, Keymap, Menu, setIcon, BasesView } from "obsidian";
+import { App, TFile, TFolder, Keymap, Menu, setIcon, BasesView, normalizePath } from "obsidian";
 import type { QueryController } from "obsidian";
 import {
 	KANBAN_VIEW_TYPE,
@@ -613,7 +613,7 @@ export class KanbanBasesView extends BasesView {
 			}
 		);
 		const files = this.collectFiles();
-		this.board.update(cfg, files, this.inferTargetFolder(files));
+		this.board.update(cfg, files, this.resolveNewTaskFolder(cfg, files));
 	}
 
 	/** Pull the deduped TFile set from the query result. */
@@ -633,6 +633,22 @@ export class KanbanBasesView extends BasesView {
 		if (Array.isArray(data?.ungroupedData)) data.ungroupedData.forEach(pushEntry);
 		for (const g of groups) (g?.entries ?? []).forEach(pushEntry);
 		return out;
+	}
+
+	/**
+	 * Prefer the board's New task folder option when it still exists; otherwise
+	 * infer from where most board tasks already live (vault root if empty).
+	 */
+	private resolveNewTaskFolder(cfg: KanbanConfig, files: TFile[]): string {
+		const configured = cfg.newTaskFolder.trim();
+		if (configured) {
+			const path = normalizePath(configured);
+			if (path && path !== ".") {
+				const folder = this.app.vault.getAbstractFileByPath(path);
+				if (folder instanceof TFolder) return path;
+			}
+		}
+		return this.inferTargetFolder(files);
 	}
 
 	/** New tasks go in the folder most tasks already live in, else vault root. */

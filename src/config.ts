@@ -22,6 +22,11 @@ export interface KanbanConfig {
 	startDateProp: string;
 	endDateProp: string;
 	defaultStatus: string;
+	/**
+	 * Vault-relative folder for new tasks from this board.
+	 * Empty → infer from where most board tasks already live.
+	 */
+	newTaskFolder: string;
 	statuses: StatusDef[];
 	priorities: PriorityDef[];
 	labelDefs: LabelDef[];
@@ -35,6 +40,12 @@ export interface RawConfigReader {
 function str(reader: RawConfigReader, key: string, fallback: string): string {
 	const v = reader.get(key);
 	return typeof v === "string" && v.trim().length > 0 ? v.trim() : fallback;
+}
+
+/** Trimmed string option; empty when unset (no fallback). */
+function optionalStr(reader: RawConfigReader, key: string): string {
+	const v = reader.get(key);
+	return typeof v === "string" ? v.trim() : "";
 }
 
 /**
@@ -109,6 +120,7 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 		startDateProp: str(reader, "startDateProp", DEFAULTS.startDateProp),
 		endDateProp: str(reader, "endDateProp", DEFAULTS.endDateProp),
 		defaultStatus: str(reader, "defaultStatus", DEFAULTS.defaultStatus),
+		newTaskFolder: optionalStr(reader, "newTaskFolder"),
 		statuses,
 		priorities: mergePriorities(DEFAULT_PRIORITIES, custom.priorities ?? []),
 		labelDefs: custom.labels ?? [],
@@ -159,6 +171,13 @@ export function viewOptions() {
 			displayName: "Default status (new tasks)",
 			key: "defaultStatus",
 			default: DEFAULTS.defaultStatus,
+		},
+		{
+			type: "folder",
+			displayName: "New task folder",
+			key: "newTaskFolder",
+			default: "",
+			placeholder: "Leave empty to auto-detect",
 		},
 		{
 			type: "text",

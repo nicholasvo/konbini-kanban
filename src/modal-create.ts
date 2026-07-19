@@ -375,6 +375,7 @@ export class CreateTaskModal extends Modal {
 			new Notice("Task needs a title");
 			return;
 		}
+		const applied = this.template ? this.board.plugin.getTemplate(this.template) : undefined;
 		const file = await createTask(this.board.app, this.board.cfg, {
 			title: this.title.trim(),
 			description: this.description,
@@ -386,9 +387,11 @@ export class CreateTaskModal extends Modal {
 			attachments: this.attachments,
 			parent: this.opts.parent,
 			folder: this.opts.folder,
+			templateId: applied?.id,
 		});
 
 		if (this.createMore) {
+			const keepTemplate = this.template;
 			this.title = "";
 			this.description = "";
 			this.labels = [];
@@ -397,6 +400,12 @@ export class CreateTaskModal extends Modal {
 			this.attachments = [];
 			this.template = null;
 			this.renderAttachments();
+			// Keep the template selection so create-more still stamps konbini-template
+			// and re-applies prefill for the next note.
+			if (keepTemplate) {
+				const tpl = this.board.plugin.getTemplate(keepTemplate);
+				if (tpl) this.setTemplate(tpl, keepTemplate);
+			}
 			this.reopenForNext();
 		} else {
 			// Stay on the board rather than opening the new note; repaint and let

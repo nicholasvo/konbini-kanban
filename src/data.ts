@@ -1,6 +1,6 @@
 import { App, TFile, normalizePath, parseLinktext } from "obsidian";
 import { KanbanConfig } from "./config";
-import { DEFAULTS } from "./constants";
+import { DEFAULTS, KONBINI_TEMPLATE_PROP } from "./constants";
 
 /** Normalized in-memory view of one task note. */
 export interface Task {
@@ -250,6 +250,8 @@ export interface NewTaskSpec {
 	endDate?: string | null;
 	attachments?: PendingAttachment[];
 	folder: string;
+	/** Template id to stamp as `konbini-template` when a template was applied. */
+	templateId?: string;
 }
 
 /** A file selected/pasted in the create modal, awaiting import into the vault. */
@@ -295,6 +297,7 @@ export async function createTask(app: App, cfg: KanbanConfig, spec: NewTaskSpec)
 		if (spec.parent) {
 			fm[cfg.parentProp] = app.fileManager.generateMarkdownLink(spec.parent, file.path);
 		}
+		if (spec.templateId) fm[KONBINI_TEMPLATE_PROP] = spec.templateId;
 	});
 
 	// Import any attachments into the vault and embed them in the note body.

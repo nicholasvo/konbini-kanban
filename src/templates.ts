@@ -3,12 +3,33 @@ import {
 	DEFAULTS,
 	KONBINI_ROLE_PROP,
 	KONBINI_ROLE_TEMPLATE,
+	KONBINI_TEMPLATE_ID_PROP,
 	LEGACY_TEMPLATES_SUBFOLDER,
 	LEGACY_VALUES_NOTE_NAME,
 	TEMPLATES_SUBFOLDER,
 	VALUES_NOTE_NAME,
 	type Template,
 } from "./constants";
+
+/** Opaque id for a template note (`tpl-` + random hex). */
+export function generateTemplateId(): string {
+	const bytes = new Uint8Array(4);
+	crypto.getRandomValues(bytes);
+	return `tpl-${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** True when editable template fields differ (ignores id/path). */
+export function templateFieldsChanged(a: Template, b: Template): boolean {
+	const labelsA = [...(a.labels ?? [])].sort().join("\0");
+	const labelsB = [...(b.labels ?? [])].sort().join("\0");
+	return (
+		a.name !== b.name ||
+		a.body !== b.body ||
+		(a.status ?? "") !== (b.status ?? "") ||
+		(a.priority ?? "") !== (b.priority ?? "") ||
+		labelsA !== labelsB
+	);
+}
 
 /** `{konbiniFolder}/Konbini Values.md` */
 export function valuesNotePath(konbiniFolder: string): string {
@@ -99,7 +120,12 @@ function yamlScalar(value: string): string {
 
 /** Serialize a template to a markdown note with Konbini frontmatter. */
 export function serializeTemplate(tpl: Template): string {
-	const lines = ["---", `${KONBINI_ROLE_PROP}: ${KONBINI_ROLE_TEMPLATE}`];
+	const id = tpl.id || generateTemplateId();
+	const lines = [
+		"---",
+		`${KONBINI_ROLE_PROP}: ${KONBINI_ROLE_TEMPLATE}`,
+		`${KONBINI_TEMPLATE_ID_PROP}: ${yamlScalar(id)}`,
+	];
 	if (tpl.status) lines.push(`${DEFAULTS.statusProp}: ${yamlScalar(tpl.status)}`);
 	if (tpl.priority) lines.push(`${DEFAULTS.priorityProp}: ${yamlScalar(tpl.priority)}`);
 	if (tpl.labels && tpl.labels.length > 0) {
@@ -131,6 +157,8 @@ export function parseTemplateFile(
 	frontmatter?: Record<string, unknown>
 ): Template {
 	const fm = frontmatter ?? parseFrontmatter(content) ?? {};
+	const idRaw = fm[KONBINI_TEMPLATE_ID_PROP];
+	const id = typeof idRaw === "string" ? idRaw.trim() : "";
 	const status = typeof fm[DEFAULTS.statusProp] === "string" ? String(fm[DEFAULTS.statusProp]).trim() : "";
 	const priority =
 		typeof fm[DEFAULTS.priorityProp] === "string" ? String(fm[DEFAULTS.priorityProp]).trim() : "";
@@ -138,6 +166,7 @@ export function parseTemplateFile(
 	return {
 		name: file.basename,
 		body: stripFrontmatter(content),
+		id: id || undefined,
 		status: status || undefined,
 		priority: priority || undefined,
 		labels: labels.length > 0 ? labels : undefined,

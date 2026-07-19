@@ -40,6 +40,7 @@ import { ConfirmModal, confirmAction } from "./modal-confirm";
 import { CreateTaskModal } from "./modal-create";
 import { countNotesWithLabel, rewriteLabelsInVault } from "./data";
 import {
+	generateTemplateId,
 	isKonbiniManagedPath as pathIsKonbiniManaged,
 	isUnderKonbiniFolder,
 	legacyTemplatesFolderPath,
@@ -47,6 +48,7 @@ import {
 	parseTemplateFile,
 	serializeTemplate,
 	stripFrontmatter,
+	templateFieldsChanged,
 	templateNotePath,
 	templatesFolderPath,
 	valuesNotePath,
@@ -176,6 +178,10 @@ export default class KonbiniKanbanPlugin extends Plugin {
 
 	getTemplate(name: string): Template | undefined {
 		return this.templateCache.find((t) => t.name === name);
+	}
+
+	getTemplateById(id: string): Template | undefined {
+		return this.templateCache.find((t) => t.id === id);
 	}
 
 	/**
@@ -455,14 +461,18 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	 */
 	async saveTemplate(template: Template, originalName?: string): Promise<void> {
 		await this.ensureFolder(templatesFolderPath(this.data.konbiniFolder));
-		const oldName = originalName ?? template.name;
+		const withId: Template = {
+			...template,
+			id: template.id || generateTemplateId(),
+		};
+		const oldName = originalName ?? withId.name;
 		const oldPath = templateNotePath(this.data.konbiniFolder, oldName);
-		const newPath = templateNotePath(this.data.konbiniFolder, template.name);
-		const content = serializeTemplate(template);
+		const newPath = templateNotePath(this.data.konbiniFolder, withId.name);
+		const content = serializeTemplate(withId);
 
 		let file = this.app.vault.getAbstractFileByPath(oldPath);
 		if (file instanceof TFile) {
-			if (oldName !== template.name) {
+			if (oldName !== withId.name) {
 				const clash = this.app.vault.getAbstractFileByPath(newPath);
 				if (clash) {
 					new Notice("A template with that name already exists");
@@ -471,7 +481,9 @@ export default class KonbiniKanbanPlugin extends Plugin {
 				await this.app.fileManager.renameFile(file, newPath);
 				file = this.app.vault.getAbstractFileByPath(newPath);
 			}
-			if (file instanceof TFile) await this.app.vault.modify(file, content);
+			if (file instanceof TFile) {
+				await this.app.vault.process(file, () => content);
+			}
 		} else {
 			const clash = this.app.vault.getAbstractFileByPath(newPath);
 			if (clash) {
@@ -781,7 +793,13 @@ export default class KonbiniKanbanPlugin extends Plugin {
 			for (const child of folder.children) {
 				if (!(child instanceof TFile) || child.extension !== "md") continue;
 				const content = await this.app.vault.read(child);
-				out.push(parseTemplateFile(child, content));
+				let tpl = parseTemplateFile(child, content);
+				if (!tpl.id) {
+					const id = generateTemplateId();
+					tpl = { ...tpl, id };
+					await this.app.vault.process(child, () => serializeTemplate(tpl));
+				}
+				out.push(tpl);
 			}
 		}
 		out.sort((a, b) => a.name.localeCompare(b.name));
@@ -1089,7 +1107,7 @@ class TemplateEditModal extends Modal {
 		new Setting(contentEl)
 			.setName("Prefill values")
 			.setDesc(
-				"Copied into a new task when this template is applied. Editing a template does not update tasks already created from it."
+				"Copied into a new task when this template is applied. Saving changes only affects notes created after you save."
 			)
 			.setHeading();
 
@@ -1185,13 +1203,23 @@ class TemplateEditModal extends Modal {
 			new Notice("A template with that name already exists");
 			return;
 		}
-		await this.onSubmit({
+		const next: Template = {
 			name,
 			body: this.body,
+			id: this.original?.id || generateTemplateId(),
 			status: this.tplStatus || undefined,
 			priority: this.tplPriority || undefined,
 			labels: this.tplLabels.length > 0 ? [...this.tplLabels] : undefined,
-		});
+		};
+		if (this.original && templateFieldsChanged(this.original, next)) {
+			const ok = await confirmAction(
+				this.app,
+				"These template changes only affect new notes created from this template. Existing notes are not updated.",
+				"Save"
+			);
+			if (!ok) return;
+		}
+		await this.onSubmit(next);
 		this.close();
 	}
 
