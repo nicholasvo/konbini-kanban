@@ -9,13 +9,26 @@ import type { TaskContext } from "./task-context";
  * origin tied to the trigger edge. Exit is the snappier ease-out curve.
  */
 
-interface PopoverHandle {
+export interface PopoverHandle {
 	close(): void;
 }
 
-function mountPopover(
+export interface MountPopoverOptions {
+	/** Extra classes on the popover surface (e.g. a wider panel). */
+	cls?: string;
+	/**
+	 * When true, pointerdown on this target won’t auto-close — use for toggle
+	 * buttons that re-render (stale anchor) and handle close in their click.
+	 */
+	ignoreClose?: (target: EventTarget | null) => boolean;
+	/** Called once when the popover begins closing. */
+	onClose?: () => void;
+}
+
+export function mountPopover(
 	anchor: HTMLElement,
-	build: (body: HTMLElement, close: () => void) => void
+	build: (body: HTMLElement, close: () => void) => void,
+	opts?: MountPopoverOptions
 ): PopoverHandle {
 	const rect = anchor.getBoundingClientRect();
 	// Mount inside the modal container when invoked from a modal, so the modal's
@@ -23,7 +36,9 @@ function mountPopover(
 	// cause of the open/close flicker. Falls back to the body on the board.
 	const host = anchor.closest<HTMLElement>(".modal-container") ?? activeDocument.body;
 	// Hide until positioned so the entrance never paints at the wrong spot.
-	const el = host.createDiv("bk-popover motion-surface bk-popover-hidden");
+	const el = host.createDiv(
+		`bk-popover motion-surface bk-popover-hidden${opts?.cls ? ` ${opts.cls}` : ""}`
+	);
 
 	// Decide vertical placement; prefer opening downward.
 	const below = rect.bottom + 8;
@@ -39,6 +54,7 @@ function mountPopover(
 		el.dataset.state = "closed";
 		activeDocument.removeEventListener("pointerdown", onDown, true);
 		activeDocument.removeEventListener("keydown", onKey, true);
+		opts?.onClose?.();
 		window.setTimeout(() => el.remove(), 160);
 	};
 
@@ -60,7 +76,10 @@ function mountPopover(
 	el.dataset.state = "open";
 
 	const onDown = (e: PointerEvent) => {
-		if (!el.contains(e.target as Node) && e.target !== anchor) close();
+		const t = e.target;
+		if (el.contains(t as Node) || anchor.contains(t as Node)) return;
+		if (opts?.ignoreClose?.(t)) return;
+		close();
 	};
 	const onKey = (e: KeyboardEvent) => {
 		if (e.key === "Escape") {

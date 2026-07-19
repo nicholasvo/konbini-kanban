@@ -27,6 +27,11 @@ export interface KanbanConfig {
 	 * Empty → infer from where most board tasks already live.
 	 */
 	newTaskFolder: string;
+	/**
+	 * Active board label filter (Settings label names). Empty → show all.
+	 * Match is OR: task is shown if it has any selected label.
+	 */
+	filterLabels: string[];
 	statuses: StatusDef[];
 	priorities: PriorityDef[];
 	labelDefs: LabelDef[];
@@ -46,6 +51,28 @@ function str(reader: RawConfigReader, key: string, fallback: string): string {
 function optionalStr(reader: RawConfigReader, key: string): string {
 	const v = reader.get(key);
 	return typeof v === "string" ? v.trim() : "";
+}
+
+/** Comma-separated string or string array → trimmed non-empty parts. */
+function parseStringList(reader: RawConfigReader, key: string): string[] {
+	const v = reader.get(key);
+	if (Array.isArray(v)) {
+		return v
+			.map((x) => String(x).trim())
+			.filter((s) => s.length > 0);
+	}
+	if (typeof v === "string" && v.trim().length > 0) {
+		return v
+			.split(",")
+			.map((s) => s.trim())
+			.filter((s) => s.length > 0);
+	}
+	return [];
+}
+
+/** Serialize a string list for Bases `config.set` (comma-separated text). */
+export function serializeStringList(items: string[]): string {
+	return items.join(", ");
 }
 
 /**
@@ -120,6 +147,12 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 			? configuredDefault
 			: (statuses[0]?.key ?? "backlog");
 
+	const labelDefs = custom.labels ?? [];
+	const knownLabelNames = new Set(labelDefs.map((d) => d.name));
+	const filterLabels = parseStringList(reader, "filterLabels").filter((n) =>
+		knownLabelNames.has(n)
+	);
+
 	return {
 		statusProp: str(reader, "statusProp", DEFAULTS.statusProp),
 		priorityProp: str(reader, "priorityProp", DEFAULTS.priorityProp),
@@ -131,9 +164,10 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 		endDateProp: str(reader, "endDateProp", DEFAULTS.endDateProp),
 		defaultStatus,
 		newTaskFolder: optionalStr(reader, "newTaskFolder"),
+		filterLabels,
 		statuses,
 		priorities: mergePriorities(DEFAULT_PRIORITIES, custom.priorities ?? []),
-		labelDefs: custom.labels ?? [],
+		labelDefs,
 	};
 }
 
