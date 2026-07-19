@@ -3,7 +3,7 @@ export const KANBAN_VIEW_TYPE = "kanban";
 /** Default vault folder for Values seed note + Templates. Overridable via settings. */
 export const DEFAULT_KONBINI_FOLDER = "Konbini";
 
-/** Legacy seed note path (pre-folder layout); migrated into `{konbiniFolder}/Values.md`. */
+/** Legacy seed note path (pre-folder layout); migrated into `{konbiniFolder}/Konbini Values.md`. */
 export const LEGACY_SEED_NOTE_PATH = "Konbini Kanban values.md";
 
 /** Basename of the legacy seed note (matches even if the user moved it into a subfolder). */
@@ -15,8 +15,15 @@ export const KONBINI_ROLE_PROP = "konbini-role";
 export const KONBINI_ROLE_VALUES = "values";
 export const KONBINI_ROLE_TEMPLATE = "template";
 
-export const VALUES_NOTE_NAME = "Values.md";
-export const TEMPLATES_SUBFOLDER = "Templates";
+/** Seed note basename — prefixed so it won't clash with a user's own Values.md. */
+export const VALUES_NOTE_NAME = "Konbini Values.md";
+
+/** Templates folder — prefixed so it won't clash with a vault Templates/ folder. */
+export const TEMPLATES_SUBFOLDER = "Konbini Templates";
+
+/** Pre-prefix layout names; migrated to VALUES_NOTE_NAME / TEMPLATES_SUBFOLDER on load. */
+export const LEGACY_VALUES_NOTE_NAME = "Values.md";
+export const LEGACY_TEMPLATES_SUBFOLDER = "Templates";
 
 export interface StatusDef {
 	key: string;
@@ -52,7 +59,7 @@ export interface LabelDef {
 	emoji?: string;
 }
 
-/** A named template (vault note under `{konbiniFolder}/Templates/`), applied on task create. */
+/** A named template (vault note under `{konbiniFolder}/Konbini Templates/`), applied on task create. */
 export interface Template {
 	name: string;
 	body: string;

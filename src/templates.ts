@@ -3,22 +3,34 @@ import {
 	DEFAULTS,
 	KONBINI_ROLE_PROP,
 	KONBINI_ROLE_TEMPLATE,
+	LEGACY_TEMPLATES_SUBFOLDER,
+	LEGACY_VALUES_NOTE_NAME,
 	TEMPLATES_SUBFOLDER,
 	VALUES_NOTE_NAME,
 	type Template,
 } from "./constants";
 
-/** `{konbiniFolder}/Values.md` */
+/** `{konbiniFolder}/Konbini Values.md` */
 export function valuesNotePath(konbiniFolder: string): string {
 	return normalizePath(`${konbiniFolder}/${VALUES_NOTE_NAME}`);
 }
 
-/** `{konbiniFolder}/Templates` */
+/** `{konbiniFolder}/Values.md` (pre-prefix layout). */
+export function legacyValuesNotePath(konbiniFolder: string): string {
+	return normalizePath(`${konbiniFolder}/${LEGACY_VALUES_NOTE_NAME}`);
+}
+
+/** `{konbiniFolder}/Konbini Templates` */
 export function templatesFolderPath(konbiniFolder: string): string {
 	return normalizePath(`${konbiniFolder}/${TEMPLATES_SUBFOLDER}`);
 }
 
-/** `{konbiniFolder}/Templates/{name}.md` */
+/** `{konbiniFolder}/Templates` (pre-prefix layout). */
+export function legacyTemplatesFolderPath(konbiniFolder: string): string {
+	return normalizePath(`${konbiniFolder}/${LEGACY_TEMPLATES_SUBFOLDER}`);
+}
+
+/** `{konbiniFolder}/Konbini Templates/{name}.md` */
 export function templateNotePath(konbiniFolder: string, name: string): string {
 	return normalizePath(`${templatesFolderPath(konbiniFolder)}/${name}.md`);
 }
@@ -33,14 +45,19 @@ export function isUnderKonbiniFolder(konbiniFolder: string, path: string): boole
 
 /**
  * True if `path` is plugin-owned and must not appear as a board task:
- * Values.md or anything under Templates/. Other notes in the Konbini folder
- * (e.g. user tasks) are normal vault notes and stay visible on boards.
+ * Konbini Values.md or anything under Konbini Templates/ (plus pre-prefix
+ * Values.md / Templates/ until migrated). Other notes in the Konbini folder
+ * stay visible on boards.
  */
 export function isKonbiniManagedPath(konbiniFolder: string, path: string): boolean {
 	const p = normalizePath(path);
-	if (p === valuesNotePath(konbiniFolder)) return true;
+	if (p === valuesNotePath(konbiniFolder) || p === legacyValuesNotePath(konbiniFolder)) {
+		return true;
+	}
 	const templates = templatesFolderPath(konbiniFolder);
-	return p === templates || p.startsWith(`${templates}/`);
+	if (p === templates || p.startsWith(`${templates}/`)) return true;
+	const legacyTemplates = legacyTemplatesFolderPath(konbiniFolder);
+	return p === legacyTemplates || p.startsWith(`${legacyTemplates}/`);
 }
 
 /**
