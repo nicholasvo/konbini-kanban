@@ -144,5 +144,6 @@ export const DEFAULTS = {
 	titleProp: "title",
 	startDateProp: "startDate",
 	endDateProp: "endDate",
-	defaultStatus: "todo",
+	/** Empty → resolveConfig picks the board's first column. */
+	defaultStatus: "",
 } as const;

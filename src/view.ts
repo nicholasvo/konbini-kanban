@@ -16,6 +16,7 @@ import { EditTaskModal } from "./modal-edit";
 import { confirmAction } from "./modal-confirm";
 import { renderEmptyKonbini } from "./konbini";
 import { statusGlyph } from "./icons";
+import type { TaskContext } from "./task-context";
 
 export interface ChildRollup {
 	done: number;
@@ -29,7 +30,7 @@ const NARROW_THRESHOLD = 600;
  * Holds everything a card needs and owns the column DOM. One board per view
  * instance; rebuilt on every onDataUpdated, but it reuses the root element.
  */
-export class KanbanBoard {
+export class KanbanBoard implements TaskContext {
 	app: App;
 	plugin: KonbiniKanbanPlugin;
 	cfg!: KanbanConfig;

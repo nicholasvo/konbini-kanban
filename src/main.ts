@@ -9,7 +9,6 @@ import {
 	TFolder,
 	normalizePath,
 	setIcon,
-	AbstractInputSuggest,
 	type BasesViewRegistration,
 } from "obsidian";
 import {
@@ -27,18 +26,21 @@ import {
 	LEGACY_SEED_NOTE_BASENAME,
 	KONBINI_ROLE_PROP,
 	KONBINI_ROLE_VALUES,
-	VALUES_NOTE_NAME,
-	TEMPLATES_SUBFOLDER,
 	LEGACY_VALUES_NOTE_NAME,
 	LEGACY_TEMPLATES_SUBFOLDER,
 	STATUS_COLOR_PALETTE,
 	buildColumnKey,
+	VALUES_NOTE_NAME,
+	TEMPLATES_SUBFOLDER,
 } from "./constants";
 import { viewOptions, mergeStatuses } from "./config";
 import { KanbanBasesView, KanbanBoard } from "./view";
 import { ConfirmModal, confirmAction } from "./modal-confirm";
 import { CreateTaskModal } from "./modal-create";
-import { countNotesWithLabel, rewriteLabelsInVault } from "./data";
+import { QuickAddLinkModal } from "./modal-quick-add-link";
+import { countNotesWithLabel, ensureVaultFolder, rewriteLabelsInVault } from "./data";
+import { QuickAddContext } from "./quick-add-context";
+import { FolderSuggest } from "./suggest";
 import {
 	generateTemplateId,
 	isKonbiniManagedPath as pathIsKonbiniManaged,
@@ -139,6 +141,14 @@ export default class KonbiniKanbanPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => void this.onVaultReady());
 
 		this.addSettingTab(new KonbiniSettingTab(this.app, this));
+
+		this.addCommand({
+			id: "insert-quick-add-link",
+			name: "Insert quick-add link",
+			editorCallback: (editor) => {
+				new QuickAddLinkModal(this, (md) => editor.replaceSelection(md)).open();
+			},
+		});
 
 		this.registerObsidianProtocolHandler("konbini", (params) => {
 			this.handleKonbiniUri(params);
@@ -807,32 +817,39 @@ export default class KonbiniKanbanPlugin extends Plugin {
 	}
 
 	private async ensureFolder(path: string): Promise<void> {
-		const norm = normalizePath(path);
-		if (!norm || norm === "." || norm === "/") return;
-		if (this.app.vault.getAbstractFileByPath(norm)) return;
-		const parts = norm.split("/").filter(Boolean);
-		let cur = "";
-		for (const part of parts) {
-			cur = cur ? `${cur}/${part}` : part;
-			if (!this.app.vault.getAbstractFileByPath(cur)) {
-				await this.app.vault.createFolder(cur);
+		await ensureVaultFolder(this.app, path);
+	}
+
+	/**
+	 * Normalize URI folder param. Older quick-add links used URLSearchParams,
+	 * which encodes spaces as "+" — if that path doesn't exist but the
+	 * space-separated path does, prefer the real folder.
+	 */
+	private resolveUriFolder(raw: string): string {
+		const folder = normalizePath(raw);
+		if (!folder || folder === ".") return folder;
+		if (this.app.vault.getAbstractFileByPath(folder) instanceof TFolder) {
+			return folder;
+		}
+		if (folder.includes("+")) {
+			const spaced = normalizePath(folder.replace(/\+/g, " "));
+			if (this.app.vault.getAbstractFileByPath(spaced) instanceof TFolder) {
+				return spaced;
 			}
 		}
+		return folder;
 	}
 
 	private handleKonbiniUri(params: Record<string, string>): void {
-		const folder = (params.folder ?? "").trim();
-		if (!folder) {
+		const folder = this.resolveUriFolder((params.folder ?? "").trim());
+		if (!folder || folder === ".") {
 			new Notice("Konbini Kanban: URI requires a folder parameter.");
 			return;
 		}
 		const board = [...this.boards][0];
-		if (!board) {
-			new Notice("Konbini Kanban: open a Kanban view first to create tasks via link.");
-			return;
-		}
-		const modal = new CreateTaskModal(board, {
-			status: board.cfg.defaultStatus,
+		const ctx = board ?? new QuickAddContext(this);
+		const modal = new CreateTaskModal(ctx, {
+			status: ctx.cfg.defaultStatus,
 			parent: null,
 			folder,
 		});
@@ -1013,41 +1030,6 @@ class LabelEditModal extends Modal {
 
 	onClose(): void {
 		this.contentEl.empty();
-	}
-}
-
-/** Inline folder search for the Konbini folder path setting (existing folders only). */
-class FolderSuggest extends AbstractInputSuggest<TFolder> {
-	private onChoose: (folder: TFolder) => void;
-	private excludePath: string;
-
-	constructor(
-		app: App,
-		inputEl: HTMLInputElement,
-		onChoose: (folder: TFolder) => void,
-		excludePath = ""
-	) {
-		super(app, inputEl);
-		this.onChoose = onChoose;
-		this.excludePath = normalizePath(excludePath);
-	}
-
-	protected getSuggestions(query: string): TFolder[] {
-		const q = query.toLowerCase().trim();
-		const folders = this.app.vault
-			.getAllFolders(/* includeRoot */ false)
-			.filter((f) => normalizePath(f.path) !== this.excludePath);
-		if (!q) return folders;
-		return folders.filter((f) => f.path.toLowerCase().includes(q));
-	}
-
-	renderSuggestion(folder: TFolder, el: HTMLElement): void {
-		el.setText(folder.path);
-	}
-
-	selectSuggestion(folder: TFolder): void {
-		this.close();
-		this.onChoose(folder);
 	}
 }
 

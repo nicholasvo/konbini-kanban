@@ -1,5 +1,4 @@
 import { Modal, TFile, setIcon, Notice } from "obsidian";
-import type { KanbanBoard } from "./view";
 import { ConfirmModal } from "./modal-confirm";
 import { createTask, PendingAttachment } from "./data";
 import { statusGlyph, priorityGlyph } from "./icons";
@@ -11,6 +10,7 @@ import {
 	datePopover,
 	templatePopover,
 } from "./pickers";
+import type { TaskContext } from "./task-context";
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
 
@@ -28,7 +28,7 @@ interface CreateOptions {
 
 /** Linear-style "New task" modal: title, description, and a row of pills. */
 export class CreateTaskModal extends Modal {
-	private board: KanbanBoard;
+	private board: TaskContext;
 	private opts: CreateOptions;
 
 	private title = "";
@@ -54,7 +54,7 @@ export class CreateTaskModal extends Modal {
 
 	private animatingClose = false;
 
-	constructor(board: KanbanBoard, opts: CreateOptions) {
+	constructor(board: TaskContext, opts: CreateOptions) {
 		super(board.app);
 		this.board = board;
 		this.opts = opts;

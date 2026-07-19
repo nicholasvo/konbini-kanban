@@ -1672,6 +1672,24 @@ body.bk-dragging {
 	height: 24px;
 }
 
+/* ---- Quick-add link modal -------------------------------- */
+
+.bk-quick-add-template-preview {
+	margin: -0.5em 0 1em 0;
+	padding: 0 0 0 0.25em;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.bk-quick-add-template-preview ul {
+	margin: 0;
+	padding-left: 1.25em;
+}
+
+.bk-quick-add-template-preview li {
+	margin: 0.15em 0;
+}
+
 /* ---- Edit sheet (mobile-first task editor) ---------------- */
 
 /* "Open note" sits on the left; Save keeps its place on the right. */

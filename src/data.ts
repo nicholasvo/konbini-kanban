@@ -280,11 +280,27 @@ async function uniquePath(app: App, folder: string, name: string): Promise<strin
 	return candidate;
 }
 
+/** Create parent folders for a vault-relative path when missing. */
+export async function ensureVaultFolder(app: App, path: string): Promise<void> {
+	const norm = normalizePath(path);
+	if (!norm || norm === "." || norm === "/") return;
+	if (app.vault.getAbstractFileByPath(norm)) return;
+	const parts = norm.split("/").filter(Boolean);
+	let cur = "";
+	for (const part of parts) {
+		cur = cur ? `${cur}/${part}` : part;
+		if (!app.vault.getAbstractFileByPath(cur)) {
+			await app.vault.createFolder(cur);
+		}
+	}
+}
+
 /**
  * Create a new task note: frontmatter holds the structured fields, the body
  * holds the description. Returns the created file.
  */
 export async function createTask(app: App, cfg: KanbanConfig, spec: NewTaskSpec): Promise<TFile> {
+	await ensureVaultFolder(app, spec.folder);
 	const path = await uniquePath(app, spec.folder, slugify(spec.title));
 	const file = await app.vault.create(path, spec.description ? `\n${spec.description}\n` : "");
 	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {

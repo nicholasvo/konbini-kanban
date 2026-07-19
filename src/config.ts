@@ -99,6 +99,10 @@ function mergePriorities(base: PriorityDef[], custom: PriorityDef[]): PriorityDe
  * 1. Per-board `statuses` override (non-empty) — wins, same as before
  * 2. Else global Settings `columns`
  * 3. Else Linear DEFAULT_STATUSES
+ *
+ * Default status for new tasks / unknown statuses:
+ * 1. Per-board `defaultStatus` when it matches a column in that set
+ * 2. Else first column of the resolved set (override → global → defaults)
  */
 export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}): KanbanConfig {
 	const rawStatuses = reader.get("statuses");
@@ -110,6 +114,12 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 			? globalColumns
 			: DEFAULT_STATUSES;
 
+	const configuredDefault = optionalStr(reader, "defaultStatus");
+	const defaultStatus =
+		configuredDefault && statuses.some((s) => s.key === configuredDefault)
+			? configuredDefault
+			: (statuses[0]?.key ?? "backlog");
+
 	return {
 		statusProp: str(reader, "statusProp", DEFAULTS.statusProp),
 		priorityProp: str(reader, "priorityProp", DEFAULTS.priorityProp),
@@ -119,7 +129,7 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 		titleProp: str(reader, "titleProp", DEFAULTS.titleProp),
 		startDateProp: str(reader, "startDateProp", DEFAULTS.startDateProp),
 		endDateProp: str(reader, "endDateProp", DEFAULTS.endDateProp),
-		defaultStatus: str(reader, "defaultStatus", DEFAULTS.defaultStatus),
+		defaultStatus,
 		newTaskFolder: optionalStr(reader, "newTaskFolder"),
 		statuses,
 		priorities: mergePriorities(DEFAULT_PRIORITIES, custom.priorities ?? []),
@@ -170,7 +180,8 @@ export function viewOptions() {
 			type: "text",
 			displayName: "Default status (new tasks)",
 			key: "defaultStatus",
-			default: DEFAULTS.defaultStatus,
+			default: "",
+			placeholder: "Leave empty for first column",
 		},
 		{
 			type: "folder",
