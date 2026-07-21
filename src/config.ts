@@ -8,6 +8,12 @@ import {
 } from "./constants";
 
 /**
+ * Sentinel filter token (stored in `filterLabels`) that matches only tasks
+ * with no labels. Chosen so it can never collide with a real label name.
+ */
+export const UNASSIGNED_FILTER = "__unassigned__";
+
+/**
  * Resolved, normalized configuration for one kanban view instance. Property
  * names and the status/priority sets are remappable through Bases view options;
  * everything defaults to the Linear-flavored values so the board looks right
@@ -147,8 +153,8 @@ export function resolveConfig(reader: RawConfigReader, custom: CustomDefs = {}):
 
 	const labelDefs = custom.labels ?? [];
 	const knownLabelNames = new Set(labelDefs.map((d) => d.name));
-	const filterLabels = parseStringList(reader, "filterLabels").filter((n) =>
-		knownLabelNames.has(n)
+	const filterLabels = parseStringList(reader, "filterLabels").filter(
+		(n) => n === UNASSIGNED_FILTER || knownLabelNames.has(n)
 	);
 
 	return {

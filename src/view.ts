@@ -7,7 +7,12 @@ import {
 	LabelDef,
 	STATUS_COLOR_PALETTE,
 } from "./constants";
-import { KanbanConfig, resolveConfig, serializeStringList } from "./config";
+import {
+	KanbanConfig,
+	resolveConfig,
+	serializeStringList,
+	UNASSIGNED_FILTER,
+} from "./config";
 import type KonbiniKanbanPlugin from "./main";
 import { Task, readTask, setStatus, collectLabels } from "./data";
 import { renderCard } from "./card";
@@ -287,6 +292,7 @@ export class KanbanBoard implements TaskContext {
 		return this.tasks.filter((task) => {
 			if (task.parentPath && this.taskByPath.has(task.parentPath)) return false;
 			if (!filterSet) return true;
+			if (filterSet.has(UNASSIGNED_FILTER) && task.labels.length === 0) return true;
 			return task.labels.some((label) => filterSet.has(label));
 		});
 	}
@@ -503,12 +509,16 @@ export class KanbanBoard implements TaskContext {
 		}
 
 		const counts = this.labelFilterCounts(settingsNames);
+		const unassignedCount = this.unassignedTaskCount();
+		// Show the "Unassigned" row when any top-level task has no labels
+		// (keep it visible when selected so it can be unchecked).
+		const showUnassigned = unassignedCount > 0 || selected.has(UNASSIGNED_FILTER);
 		// Only list labels that appear on at least one top-level board task
 		// (keep currently selected labels visible so they can be unchecked).
 		const names = settingsNames.filter(
 			(name) => (counts.get(name) ?? 0) > 0 || selected.has(name)
 		);
-		if (names.length === 0) {
+		if (names.length === 0 && !showUnassigned) {
 			panel.createDiv({
 				cls: "bk-label-filter-empty",
 				text: "No labels in use on this board yet.",
@@ -517,6 +527,30 @@ export class KanbanBoard implements TaskContext {
 		}
 
 		const list = panel.createDiv("bk-label-filter-list");
+		if (showUnassigned) {
+			const row = list.createEl("label", {
+				cls: "bk-label-filter-row bk-label-filter-row-unassigned",
+			});
+			row.createSpan({
+				cls: "bk-label-filter-row-name",
+				text: "Unassigned",
+			});
+			row.createSpan({
+				cls: "bk-label-filter-row-count",
+				text: String(unassignedCount),
+			});
+			const checkbox = row.createEl("input", {
+				cls: "bk-label-filter-checkbox",
+				attr: { type: "checkbox" },
+			});
+			checkbox.checked = selected.has(UNASSIGNED_FILTER);
+			checkbox.onchange = () => {
+				const next = new Set(selected);
+				if (checkbox.checked) next.add(UNASSIGNED_FILTER);
+				else next.delete(UNASSIGNED_FILTER);
+				onChange(next);
+			};
+		}
 		for (const name of names) {
 			const row = list.createEl("label", { cls: "bk-label-filter-row" });
 			row.createSpan({ cls: "bk-label-filter-row-name", text: name });
@@ -564,6 +598,16 @@ export class KanbanBoard implements TaskContext {
 			}
 		}
 		return counts;
+	}
+
+	/** Top-level tasks that carry no labels at all. */
+	private unassignedTaskCount(): number {
+		let n = 0;
+		for (const task of this.tasks) {
+			if (task.parentPath && this.taskByPath.has(task.parentPath)) continue;
+			if (task.labels.length === 0) n++;
+		}
+		return n;
 	}
 
 	/** Fade + settle a newly created card into place. */
